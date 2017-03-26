@@ -61,7 +61,7 @@ FuelDOM.render(<Component/>, document.getElementById('app'));
 Fork!
 
 ```
-npm install
-npm run test
-npm run minify
+yarn install
+yarn run test
+yarn run minify
 ```
