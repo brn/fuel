@@ -12,6 +12,13 @@ The FuelDOM is React compatible virtual-dom implementation.
 npm install fueldom --save
 ```
 
+## Now compatible with
+
+* React Component feature like `setState`.
+* React Component hooks like `componentWillMount`
+* DOM Event handler.
+* DOM Style props.
+
 ## Usage
 
 ### Simple rendering
