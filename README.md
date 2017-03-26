@@ -38,7 +38,7 @@ FuelDOM.render(<Component/>, document.getElementById('app'));
 
 ## Future
 
-### WE WON't DO
+### WE WON'T DO
 
 * 100% compatiblity with React.
 * React fiber.
