@@ -1,9 +1,10 @@
 {
   "name": "fueldom",
-  "version": "0.0.3",
+  "version": "0.0.5",
   "description": "",
   "main": "dist/index.bundle.js",
   "scripts": {
+    "release": "gulp release",
     "minify": "gulp",
     "test": "gulp test-chrome",
     "ct": "gulp ct-chrome"

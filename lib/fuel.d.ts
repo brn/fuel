@@ -60,7 +60,7 @@ export declare class Fuel {
      */
     static Component: typeof ComponentImpl;
     static PureComponent: typeof PureComponentImpl;
-    static isValidElement: (el: FuelElement) => boolean;
+    static isValidElement: (el: any) => boolean;
     static cloneElement: typeof cloneElement;
     static createFactory: (tag: string) => () => FuelElement;
     static Children: {

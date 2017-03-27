@@ -251,6 +251,29 @@ gulp.task('ct-chrome', () => {
 });
 
 
+gulp.task('publish', () => {
+  execSync('npm publish', {stdio: [0,1,2]});
+});
+
+
+gulp.task('release', () => {
+  const runSequence = require('run-sequence');
+  return runSequence(
+    'clean',
+    'bundle-all-tests',
+    'run-test-chrome',
+    'clean',
+    'minify',
+    'local-install',
+    'bundle-ct',
+    'run-test-chrome',
+    'clean',
+    'minify',
+    'publish'
+  );
+});
+
+
 gulp.task('default', () => {
   const runSequence = require('run-sequence');
   return runSequence(
