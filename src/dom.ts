@@ -29,7 +29,7 @@ import {
 
 
 export const FuelDOM = {
-  render(element: FuelElement, firstNode: FuelDOMNode, cb: (dom: Node) => void = (dom: Node) => {}) {
+  render(element: FuelElement, firstNode: FuelDOMNode|Node, cb: (dom: Node) => void = (dom: Node) => {}) {
     if (!FuelStem.renderer) {
       FuelStem.renderer = new DomRenderer();
     }
@@ -37,7 +37,7 @@ export const FuelDOM = {
       element._stem = new FuelStem();
     }
     element._stem.render(element, root => {
-      firstNode.appendChild(root as any);
+      (firstNode as HTMLElement).appendChild(root as any);
       cb && cb(root);
     });
   }

@@ -110,18 +110,21 @@ export class FuelElementView {
     return fuelElement._componentRenderedElementTreeCache;
   }
 
-  public static getProps({props}: FuelElement): Object {
+  public static getProps({props, children}: FuelElement, isInsertChildren = false): Object {
     const attrs = {};
     for (let i = 0, len = props.length; i < len; i++) {
       const {name, value} = props[i];
       attrs[name] = value;
+    }
+    if (isInsertChildren) {
+      attrs['children'] = children.length? children: null;
     }
     return attrs;
   }
 
   public static instantiateComponent(fuelElement: FuelElement, oldElement?: FuelElement, mountCallbacks?: FuelComponent<any, any>[]) {
     const {props, type} = fuelElement
-    const attrs = this.getProps(fuelElement);
+    const attrs = this.getProps(fuelElement, true);
     const oldAttrs = oldElement? this.getProps(oldElement): null;
     if (this.isStatelessComponent(fuelElement)) {
       return (type as StatelessComponent<any>)(attrs);
@@ -209,7 +212,23 @@ export class FuelElementView {
 }
 
 
-function cloneNode(fuelElement: FuelElement) {
+function mergeProps(oldP: Property[], p: any) {
+  const buf = {};
+  for (let i = 0, len = oldP.length; i < len; i++) {
+    buf[oldP[i].name] = i;
+  }
+  for (const key in p) {
+    if (buf[key]) {
+      oldP[buf[key]].value = p[key];
+    } else {
+      oldP.push({name: key, value: p[key]});
+    }
+  }
+  return oldP;
+}
+
+
+export function cloneElement(fuelElement: FuelElement, props: any, children: (FuelElement|string|number)[] = []) {
   const stack = [
     {
       element: fuelElement,
@@ -225,7 +244,7 @@ function cloneNode(fuelElement: FuelElement) {
     let newEl;
     if (!parsed) {
       next.parsed = true;
-      newEl = makeFuelElement(element.type, element.key, element.props, []);
+      newEl = makeFuelElement(element.type, element.key, mergeProps(element.props.slice(), props), children as any);
       for (const key in element) {
         newEl[key] = element;
       }

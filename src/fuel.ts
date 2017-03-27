@@ -32,7 +32,8 @@ import {
 } from './stem';
 import {
   FuelElementView,
-  makeFuelElement
+  makeFuelElement,
+  cloneElement
 } from './element';
 import {
   Renderer
@@ -93,6 +94,54 @@ function createTextNode(child: string) {
 const VALID_TYPES = {'string': 1, 'function': 1};
 
 
+export class ComponentImpl<Props, State> implements FuelComponent<Props, State> {
+  constructor(private _props: Props = {} as any) {
+  }
+
+  public get ['props']() {return this._props}
+
+  public ['componentWillMount']() {}
+
+  public ['componentDidMount']() {}
+
+  public ['componentWillUpdate']() {}
+
+  public ['componentDidUpdate']() {}
+
+  public ['componentWillReceiveProps'](props: Props) {
+    this._props = props;
+  }
+
+  public ['shouldComponentUpdate'](nextProps, prevProps) {return true;}
+
+  public ['render'](): FuelElement {return null;}
+
+  public ['getChildContext']<CC extends {}>(): CC {return {} as CC;};
+
+  /**
+   * Will be rewrited after.
+   */
+  public ['setState'](state: State, cb?: () => void) {}
+}
+
+export class PureComponentImpl<Props, State> extends ComponentImpl<Props, State> {
+  public ['shouldComponentUpdate'](nextProps, prevProps) {
+    for (const prop in nextProps) {
+      if (!(prop in prevProps)) {
+        return true;
+      }
+      if (prevProps[prop] !== nextProps[prop]) {
+        return true;
+      }
+    }
+    if (Object.keys(nextProps).length !== Object.keys(prevProps).length) {
+      return true;
+    }
+    return false;
+  }
+}
+
+
 export class Fuel {
   /**
    * Create Fuel element.
@@ -105,7 +154,7 @@ export class Fuel {
   public static createElement<P extends {key?: string}>(type: string,                      props: HTMLAttributes, ...children: FuelNode[]): FuelElement;
   public static createElement<P extends {key?: string}>(type: FuelComponentStatic<P, any>, props: P,              ...children: FuelNode[]): FuelElement;
   public static createElement<P extends {key?: string}>(type: StatelessComponent<P>,       props: P,              ...children: FuelNode[]): FuelElement;
-  public static ['createElement']<P extends {key?: string}>(type: string|FuelComponentStatic<P, any>|StatelessComponent<P>, props: HTMLAttributes & P, ...children: FuelElement[]): FuelElement {
+  public static createElement<P extends {key?: string}>(type: string|FuelComponentStatic<P, any>|StatelessComponent<P>, props: HTMLAttributes & P, ...children: FuelElement[]): FuelElement {
 
     invariant(!VALID_TYPES[typeof type], `Fuel element only accept one of 'string' or 'function' but got ${type}`);
 
@@ -121,8 +170,10 @@ export class Fuel {
     // Because for in loop is too slow and props will iterate many times.
     let attributes: Property[] = [];
     for (const name in props) {
-      const value = props[name];
-      attributes.push({name, value});
+      if (name !== 'key') {
+        const value = props[name];
+        attributes.push({name, value});
+      }
     }
 
     const el = makeFuelElement(typeof type === 'string'? FuelElementView.allocateTagName(type): type, props.key, attributes, children);
@@ -138,34 +189,25 @@ export class Fuel {
   /**
    * Base class of FuelComponent.
    */
-  public static FuelComponent = class FuelComponentImpl<Props, State> implements FuelComponent<Props, State> {
-    constructor(private _props: Props = {} as any) {
-    }
+  public static Component = ComponentImpl;
 
-    public get ['props']() {return this._props}
+  public static PureComponent = PureComponentImpl;
 
-    public ['componentWillMount']() {}
+  public static isValidElement = (el: any) => el? FuelElementView.isFuelElement(el): false
 
-    public ['componentDidMount']() {}
+  public static cloneElement = cloneElement
 
-    public ['componentWillUpdate']() {}
+  public static createFactory = (tag: string) => () => Fuel.createElement(tag, {})
 
-    public ['componentDidUpdate']() {}
-
-    public ['componentWillReceiveProps'](props: Props) {
-      this._props = props;
-    }
-
-    public ['shouldComponentUpdate'](nextProps, prevProps) {return true;}
-
-    public ['render'](): FuelElement {return null;}
-
-    public ['getChildContext']<CC extends {}>(): CC {return {} as CC;};
-
-    /**
-     * Will be rewrited after.
-     */
-    public ['setState'](state: State, cb?: () => void) {}
+  public static Children = {
+    map<T>(children: FuelElement[]|null, cb: (el: FuelElement) => T): T[] {
+      return children? children.map(cb): [];
+    },
+    forEach(children: FuelElement[]|null, cb: (el: FuelElement) => void): void {
+      children && children.forEach(cb);
+    },
+    count(children: FuelElement[]|null) {return children? children.length: 0;},
+    toArray(children: FuelElement[]|null) {return children? children: [];}
   }
 }
 
@@ -174,6 +216,4 @@ export class Fuel {
  * Reactjs compatible definitions.
  * If you use typescript with tsx, import React namespace required.
  */
-export const React = {
-  'createElement': Fuel['createElement']
-}
+export const React = Fuel;

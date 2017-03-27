@@ -132,7 +132,7 @@ describe('stem', () => {
     it('update with component', done => {
       let flag = true;
       let called = 0;
-      class Component extends Fuel.FuelComponent<any, any> {
+      class Component extends Fuel.Component<any, any> {
         constructor() {
           super();
           called++;
@@ -189,7 +189,7 @@ describe('stem', () => {
     });
 
 
-    class Component extends Fuel.FuelComponent<any, any> {
+    class Component extends Fuel.Component<any, any> {
       constructor(props) {
         super(props);
       }
@@ -213,13 +213,13 @@ describe('stem', () => {
       }
     }
 
-    class IDComponent extends Fuel.FuelComponent<any, any> {
+    class IDComponent extends Fuel.Component<any, any> {
       render() {
         return <Component {...this.props}/>;
       }
     }
 
-    class NestedComponent extends Fuel.FuelComponent<any, any> {
+    class NestedComponent extends Fuel.Component<any, any> {
       render() {
         return (
           <div>
@@ -300,7 +300,7 @@ describe('stem', () => {
     it('update keyed item', done => {
       let flag = true;
       let called = 0;
-      class Component extends Fuel.FuelComponent<any, any> {
+      class Component extends Fuel.Component<any, any> {
         constructor() {
           super();
           called++;
@@ -358,6 +358,6 @@ describe('stem', () => {
           done();
         });
       });
-    })
+    });
   });
 });

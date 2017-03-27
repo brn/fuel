@@ -29,7 +29,7 @@ describe('tree', () => {
       renderer = new StringRenderer(false);
     });
 
-    class Component extends Fuel.FuelComponent<any, any> {
+    class Component extends Fuel.Component<any, any> {
       render() {
         return (
           <table>
@@ -52,11 +52,11 @@ describe('tree', () => {
       }
     }
 
-    class IDComponent extends Fuel.FuelComponent<any, any> {
+    class IDComponent extends Fuel.Component<any, any> {
       render() {return <Component />}
     }
 
-    class NestedComponent extends Fuel.FuelComponent<any, any> {
+    class NestedComponent extends Fuel.Component<any, any> {
       render() {
         return (
           <div>
@@ -147,6 +147,20 @@ describe('tree', () => {
       );
       fastCreateDomTree(el, el, renderer, () => new FuelStem(), []);
       expect(el.dom.toString()).to.be.eq('<div><ul><li><span>text</span></li><li><span>text2</span></li><li><span><a href="javascript:void(0)">text3</a></span></li><li><div><table><thead><tr><th>header1</th><th>header2</th><th>header3</th></tr></thead><tbody><tr><td>body1</td><td>body2</td><td>boy3</td></tr></tbody></table></div></li></ul></div>');
+    });
+
+    class ChildrenComponent extends Fuel.Component<any ,any> {
+      render() {
+        return <div>
+          {this.props.children}
+        </div>
+      }
+    }
+
+    it('create dom tree contains children', () => {
+      const el = <div><ChildrenComponent><span>foo-bar-baz</span></ChildrenComponent></div>;
+      fastCreateDomTree(el, el, renderer, () => new FuelStem(), []);
+      expect(el.dom.toString()).to.be.eq('<div><div><span>foo-bar-baz</span></div></div>');
     });
   });
 });

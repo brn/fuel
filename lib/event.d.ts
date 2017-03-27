@@ -14,12 +14,10 @@
  * @fileoverview
  * @author Taketoshi Aono
  */
-"use strict";
-function __export(m) {
-    for (var p in m) if (!exports.hasOwnProperty(p)) exports[p] = m[p];
+import { SharedEventHandler } from './type';
+export declare class SharedEventHandlerImpl implements SharedEventHandler {
+    private events;
+    private id;
+    addEvent(root: EventTarget, el: EventTarget, type: string, callback: (e: Event) => void): void;
+    removeEvent(root: EventTarget, el: EventTarget): void;
 }
-Object.defineProperty(exports, "__esModule", { value: true });
-var fuel_1 = require("./fuel");
-exports.Fuel = fuel_1.Fuel;
-exports.React = fuel_1.React;
-__export(require("./dom"));

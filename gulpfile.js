@@ -28,7 +28,7 @@ function typescript(srcs = [], useSourcemaps = false) {
   const sourceMaps = require('gulp-sourcemaps');
   const project = tsc.createProject('tsconfig.json', {
     typescript: require('typescript'),
-    traceResolution: true
+    declaration: true
   });
   const src = gulp.src(srcs.concat(['src/**/*', '_references.ts']));
   return (() => {
@@ -66,8 +66,8 @@ gulp.task('typescript-test', () => {
 /**
  * javascriptのminify
  */
-gulp.task('minify', ['typescript'], () => {
-  minify({file: 'lib/index.js', uglify: true, souceMaps: false, builtins: false});
+gulp.task('minify', ['typescript'], done => {
+  minify({file: 'lib/index.js', uglify: true, souceMaps: false, builtins: false, onEnd: done});
 });
 
 
@@ -81,8 +81,12 @@ function minify({file, uglify = false, sourceMaps = false, onEnd = null, builtin
   const buffer = require('vinyl-buffer');
   const sourcemaps = require('gulp-sourcemaps');
   const guglify = require('gulp-uglify');
+  const Uglify = require('uglify-js');
+  const derequire = require('gulp-derequire');
+  let reserved = Uglify.readReservedFile('./reserved.json');
+  reserved = Uglify.readDefaultReservedFile(reserved);
 
-  const b = browserify(file, {debug: sourceMaps, builtins})
+  const b = browserify(file, {debug: sourceMaps, builtins, standalone: 'Fuel'})
           .on('error', e => {
             console.error(e);
             process.exit(1);
@@ -90,6 +94,7 @@ function minify({file, uglify = false, sourceMaps = false, onEnd = null, builtin
           .plugin(tsify)
           .bundle()
           .pipe(source(`${path.basename(file).replace(/\.[^.]+$/, '')}.bundle.js`))
+          .pipe(derequire())
           .pipe(buffer());
 
   const next = (() => {
@@ -97,7 +102,10 @@ function minify({file, uglify = false, sourceMaps = false, onEnd = null, builtin
       return b.pipe(guglify({
         mangle: true,
         compress: true,
-        mangleProperties: true
+        mangleProperties: {
+          reserved: reserved.props,
+          ignore_quoted: true
+        }
       }));
     }
     return b;
@@ -114,6 +122,12 @@ function minify({file, uglify = false, sourceMaps = false, onEnd = null, builtin
 }
 
 
+gulp.task('local-install', () => {
+  execSync('npm link', {stdio: [0,1,2]});
+  execSync(`npm link fueldom`, {stdio: [0,1,2]});
+});
+
+
 /**
  * 一時ファイルの削除
  */
@@ -125,6 +139,14 @@ gulp.task('clean', (cb) => {
 gulp.task('bundle-all-tests', (done) => {
   const async = require('async');
   async.forEachSeries(require('glob').sync('src/**/__tests__/*.spec.ts*'), (file, done) => {
+    minify({file, onEnd: done, sourceMaps: true});
+  }, done);
+});
+
+
+gulp.task('bundle-ct', (done) => {
+  const async = require('async');
+  async.forEachSeries(require('glob').sync('ct/*.spec.ts*'), (file, done) => {
     minify({file, onEnd: done, sourceMaps: true});
   }, done);
 });
@@ -214,7 +236,19 @@ gulp.task('test-chrome', () => {
     'bundle-all-tests',
     'run-test-chrome'
   );
-})
+});
+
+
+gulp.task('ct-chrome', () => {
+  const runSequence = require('run-sequence');
+  return runSequence(
+    'clean',
+    'minify',
+    'local-install',
+    'bundle-ct',
+    'run-test-chrome'
+  );
+});
 
 
 gulp.task('default', () => {

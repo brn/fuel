@@ -14,12 +14,10 @@
  * @fileoverview
  * @author Taketoshi Aono
  */
-"use strict";
-function __export(m) {
-    for (var p in m) if (!exports.hasOwnProperty(p)) exports[p] = m[p];
-}
-Object.defineProperty(exports, "__esModule", { value: true });
-var fuel_1 = require("./fuel");
-exports.Fuel = fuel_1.Fuel;
-exports.React = fuel_1.React;
-__export(require("./dom"));
+import { BufferType } from './type';
+export declare const makeBuffer: (number) => BufferType;
+export declare function setBuffer(buffer: BufferType, value: BufferType, offset?: number): BufferType;
+export declare const Symbol: any;
+export declare function invariant(condition: any, message: string, warn?: boolean): void;
+export declare const requestAnimationFrame: (cb: any) => any;
+export declare const requestIdleCallback: (cb: any) => any;

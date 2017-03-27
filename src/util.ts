@@ -19,9 +19,12 @@
 import {
   BufferType,
   HAS_TYPED_ARRAY,
-  BUFFER_SIZE_MULTIPLER
+  BUFFER_SIZE_MULTIPLER,
+  ExportProperites
 } from './type';
 
+declare var global: any;
+const g = typeof global === 'object'? global: typeof window === 'object'? window: this || {};
 
 export const makeBuffer: (number) => BufferType = HAS_TYPED_ARRAY? size => {
   return new Uint16Array(new ArrayBuffer(size * BUFFER_SIZE_MULTIPLER));
@@ -40,7 +43,7 @@ export function setBuffer(buffer: BufferType, value: BufferType, offset: number 
 }
 
 
-export const Symbol = typeof window['Symbol'] === 'function'? window['Symbol']: (() => {
+export const Symbol = typeof g[ExportProperites.Symbol] === 'function'? g[ExportProperites.Symbol]: (() => {
   const map = {};
   function Symbol(sym: string) {
     return `@@${sym}`;
@@ -63,8 +66,8 @@ export function invariant(condition: any, message: string, warn = false) {
   }
 }
 
-const HAS_REQUEST_ANIMATION_FRAME = typeof window.requestAnimationFrame === 'function';
-export const requestAnimationFrame = HAS_REQUEST_ANIMATION_FRAME? cb => window.requestAnimationFrame(cb): cb => setTimeout(cb, 60)
+const HAS_REQUEST_ANIMATION_FRAME = typeof g.requestAnimationFrame === 'function';
+export const requestAnimationFrame = HAS_REQUEST_ANIMATION_FRAME? cb => g.requestAnimationFrame(cb): cb => setTimeout(cb, 60)
 
-const HAS_REQUEST_IDLE_CALLBACK = typeof window['requestIdleCallback'] === 'function';
-export const requestIdleCallback = HAS_REQUEST_IDLE_CALLBACK? cb => window['requestIdleCallback'](cb): cb => cb();
+const HAS_REQUEST_IDLE_CALLBACK = typeof g['requestIdleCallback'] === 'function';
+export const requestIdleCallback = HAS_REQUEST_IDLE_CALLBACK? cb => g['requestIdleCallback'](cb): cb => cb();

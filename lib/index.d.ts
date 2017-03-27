@@ -14,12 +14,5 @@
  * @fileoverview
  * @author Taketoshi Aono
  */
-"use strict";
-function __export(m) {
-    for (var p in m) if (!exports.hasOwnProperty(p)) exports[p] = m[p];
-}
-Object.defineProperty(exports, "__esModule", { value: true });
-var fuel_1 = require("./fuel");
-exports.Fuel = fuel_1.Fuel;
-exports.React = fuel_1.React;
-__export(require("./dom"));
+export { Fuel, React } from './fuel';
+export * from './dom';

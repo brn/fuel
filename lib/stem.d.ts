@@ -14,12 +14,23 @@
  * @fileoverview
  * @author Taketoshi Aono
  */
-"use strict";
-function __export(m) {
-    for (var p in m) if (!exports.hasOwnProperty(p)) exports[p] = m[p];
+import { FuelElement, SharedEventHandler, Stem } from './type';
+import { Renderer } from './renderer/renderer';
+export declare class FuelStem implements Stem {
+    static renderer: Renderer;
+    private tree;
+    private batchs;
+    private batchCallback;
+    private mountCallbacks;
+    private sharedEventHandler;
+    registerOwner(owner: FuelElement): void;
+    owner(): FuelElement;
+    setEventHandler(handler: SharedEventHandler): void;
+    getEventHandler(): SharedEventHandler;
+    private renderAtAnimationFrame();
+    render(el: FuelElement, callback?: (el: Node) => void): void;
+    private attach(el);
+    private notifyComponentDidUpdate();
+    private notifyComponentDidMount();
+    private patch(root);
 }
-Object.defineProperty(exports, "__esModule", { value: true });
-var fuel_1 = require("./fuel");
-exports.Fuel = fuel_1.Fuel;
-exports.React = fuel_1.React;
-__export(require("./dom"));

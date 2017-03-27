@@ -14,12 +14,13 @@
  * @fileoverview
  * @author Taketoshi Aono
  */
-"use strict";
-function __export(m) {
-    for (var p in m) if (!exports.hasOwnProperty(p)) exports[p] = m[p];
+import { Renderer } from './renderer';
+import { FuelDOMNode } from '../type';
+export declare class StringRenderer implements Renderer {
+    private recordGeneration;
+    private id;
+    updateId(): void;
+    constructor(recordGeneration?: boolean);
+    createElement(tagName: string): FuelDOMNode;
+    createTextNode(text: string): FuelDOMNode;
 }
-Object.defineProperty(exports, "__esModule", { value: true });
-var fuel_1 = require("./fuel");
-exports.Fuel = fuel_1.Fuel;
-exports.React = fuel_1.React;
-__export(require("./dom"));

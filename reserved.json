@@ -1,0 +1,4 @@
+{
+  "vars": [ "define", "require", "Fuel", "React", "FuelDOM", "FuelComponent", "__extends" ],
+  "props": [ "exports", "Fuel", "React", "amd", "FuelDOM", "FuelComponent", "__extends", "createElement", "Component", "PureComponent", "isValidElement", "cloneElement", "createFactory", "Children", "map", "forEach", "count", "toArray"]
+}

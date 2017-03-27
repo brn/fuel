@@ -3,14 +3,11 @@
  * @author Taketoshi Aono
  */
 
-
 import {
-  FuelDOM
-} from '../dom';
-import {
+  Fuel,
   React,
-  Fuel
-} from '../fuel';
+  FuelDOM
+} from 'fueldom';
 import {
   expect
 } from 'chai';
@@ -71,10 +68,10 @@ describe('FuelDOM', () => {
             done();
           });
         }
-      }
-      FuelDOM.render(<Component />, dom, (tree: HTMLElement) => {
-        tree.click();
-      });
+                                                           }
+        FuelDOM.render(<Component />, dom, (tree: HTMLElement) => {
+          tree.click();
+        });
     });
 
     it('render only internal component', done => {
@@ -94,16 +91,16 @@ describe('FuelDOM', () => {
         private handleClick(e: Event) {
           this.setState({value: this.state.value + 1});
         }
-      }
-      FuelDOM.render(<div><Component /></div>, dom, () => {
-        dom.querySelector('.foo-bar').click();
-        setTimeout(() => {
-          dom.querySelector('.foo-bar').click();
-          setTimeout(() => {
-            done();
-          }, 100);
-        }, 100);
-      });
+                                                           }
+            FuelDOM.render(<div><Component /></div>, dom, () => {
+              dom.querySelector('.foo-bar').click();
+              setTimeout(() => {
+                dom.querySelector('.foo-bar').click();
+                setTimeout(() => {
+                  done();
+                }, 100);
+              }, 100);
+            });
     });
   });
 })

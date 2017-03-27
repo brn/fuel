@@ -16,5 +16,5 @@
  */
 
 
-export * from './fuel';
+export {Fuel, React} from './fuel';
 export * from './dom';

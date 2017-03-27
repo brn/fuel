@@ -18,9 +18,12 @@ import {
 import {
   StringRenderer
 } from '../renderer/string-renderer';
+import {
+  expect
+} from 'chai';
 
 
-class Component extends Fuel.FuelComponent<any, any> {
+class Component extends Fuel.Component<any, any> {
   public render() {
     return (
       <ul className="foobar-baz">
@@ -52,5 +55,19 @@ describe('Fuel', () => {
         </div>
       );
     })
+  });
+
+  describe('isValidElement', () => {
+    it('return element is valid or not', () => {
+      expect(Fuel.isValidElement({})).to.be.false;
+      expect(Fuel.isValidElement(<div></div>)).to.be.true;
+    });
+  });
+
+  describe('createFactory', () => {
+    it('create element factory function', () => {
+      const el = Fuel.createFactory('div');
+      expect(Fuel.isValidElement(el())).to.be.true;
+    });
   });
 });

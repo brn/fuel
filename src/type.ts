@@ -55,11 +55,11 @@ export interface StringNodeReprensation {
   text?: string;
 }
 
-type FuelText = string | number;
-type FuelChild = FuelElement | FuelText;
+export type FuelText = string | number;
+export type FuelChild = FuelElement | FuelText;
 
 // Should be Array<ReactNode> but type aliases cannot be recursive
-type FuelFragment = {} | Array<FuelChild | any[] | boolean>;
+export type FuelFragment = {} | Array<FuelChild | any[] | boolean>;
 export type FuelNode = FuelChild | FuelFragment | boolean;
 
 export interface FuelDOMNode extends EventTarget {
@@ -157,7 +157,8 @@ export const ExportProperites = {
   'render': 'render',
   'shouldComponentUpdate': 'shouldComponentUpdate',
   'setState': 'shouldComponentUpdate',
-  'getChildContext': 'getChildContext'
+  'getChildContext': 'getChildContext',
+  "Symbol": "Symbol"
 }
 
 export interface StatelessComponent<Props> {
