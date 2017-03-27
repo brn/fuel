@@ -41,7 +41,8 @@ import {
 import {
   makeBuffer,
   setBuffer,
-  Symbol
+  Symbol,
+  merge
 } from './util';
 import {
   SharedEventHandlerImpl
@@ -122,40 +123,76 @@ export class FuelElementView {
     return attrs;
   }
 
-  public static instantiateComponent(fuelElement: FuelElement, oldElement?: FuelElement, mountCallbacks?: FuelComponent<any, any>[]) {
+  public static invokeDidMount(el: FuelElement) {
+    if (el._componentInstance) {
+      el._componentInstance.componentDidMount();
+    }
+  }
+
+  public static invokeWillMount(el: FuelElement) {
+    if (el._componentInstance) {
+      el._componentInstance.componentWillMount();
+    }
+  }
+
+  public static invokeWillUpdate(el: FuelElement) {
+    if (el._componentInstance) {
+      el._componentInstance.componentWillUpdate();
+    }
+  }
+
+  public static invokeDidUpdate(el: FuelElement) {
+    if (el._componentInstance) {
+      el._componentInstance.componentDidUpdate();
+    }
+  }
+
+  public static invokeWillUnmount(el: FuelElement) {
+    if (el._componentInstance) {
+      el._componentInstance.componentWillUnmount();
+    }
+  }
+
+  public static instantiateComponent(context: any, fuelElement: FuelElement, oldElement?: FuelElement) {
     const {props, type} = fuelElement
     const attrs = this.getProps(fuelElement, true);
     const oldAttrs = oldElement? this.getProps(oldElement): null;
     if (this.isStatelessComponent(fuelElement)) {
-      return (type as StatelessComponent<any>)(attrs);
+      return [(type as StatelessComponent<any>)(attrs, context), context];
     }
 
     let instance: FuelComponent<Phai, Phai> = fuelElement._componentInstance;
     let callReceiveHook = !!instance;
     if (!instance) {
-      instance = fuelElement._componentInstance = new (type as FuelComponentStatic<Phai, Phai>)(attrs);
+      instance = fuelElement._componentInstance = new (type as FuelComponentStatic<Phai, Phai>)(attrs, context);
       instance.setState = function(state, cb) {
         this.state = state;
         this[ExportProperites.componentWillUpdate]();
         fuelElement._stem.render(fuelElement, () => {
           cb && cb();
-          this[ExportProperites.componentDidUpdate]();
         });
       }
-      instance[ExportProperites.componentWillMount]();
+    } else {
+      if ((instance as any)._context) {
+        (instance as any)._context = context;
+      }
     }
 
-    if (mountCallbacks) {
-      mountCallbacks.push(instance);
-    }
+    const newContext = merge(context, instance.getChildContext())
 
     if (fuelElement._componentRenderedElementTreeCache && !instance[ExportProperites.shouldComponentUpdate](attrs, oldAttrs)) {
       if (callReceiveHook) {
         instance.componentWillReceiveProps(attrs);
       }
-      return fuelElement._componentRenderedElementTreeCache;
+      return [fuelElement._componentRenderedElementTreeCache, newContext];
     }
-    return fuelElement._componentRenderedElementTreeCache = instance[ExportProperites.render]();
+    const rendered = fuelElement._componentRenderedElementTreeCache = instance[ExportProperites.render]();
+    // If rendered component was FuelComponent,
+    // _componentInstance must not to be setted.
+    if (rendered && !this.isComponent(rendered)) {
+      rendered._componentInstance = instance;
+    }
+    return [rendered, newContext];
   }
 
   public static createDomElement(rootElement: FuelElement, fuelElement: FuelElement, renderer: Renderer, createStem: () => Stem) {
@@ -196,7 +233,7 @@ export class FuelElementView {
         const refType = typeof value;
         if (refType === 'string') {
           if (this.isComponent(rootElement)) {
-            rootElement._componentInstance[ExportProperites.refs][name] = dom as any;
+            rootElement._componentInstance.refs[value] = dom as any;
           }
         } else if (refType === 'function') {
           value(dom);

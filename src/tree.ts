@@ -6,6 +6,7 @@
 import {
   FuelElement,
   FuelComponent,
+  FuelComponentStatic,
   Stem,
   FuelDOMNode
 } from './type';
@@ -26,11 +27,12 @@ type FastDomTreeStackType = {
   children: FuelElement[],
   dom: FuelDOMNode,
   parent: FuelDOMNode,
-  root: FuelElement
+  root: FuelElement,
+  context: any;
 };
 
 
-function makeInitialDomTreeStack(rootElement: FuelElement, fuelElement: FuelElement): FastDomTreeStackType[] {
+function makeInitialDomTreeStack(context: any, rootElement: FuelElement, fuelElement: FuelElement): FastDomTreeStackType[] {
   return [
     {
       element: fuelElement,
@@ -38,31 +40,32 @@ function makeInitialDomTreeStack(rootElement: FuelElement, fuelElement: FuelElem
       children: fuelElement.children.slice(),
       dom: fuelElement.dom,
       parent: null,
-      root: rootElement
+      root: rootElement,
+      context
     }
   ]
 }
 
 
 export function fastCreateDomTree(
+  context: any,
   rootElement: FuelElement,
   fuelElement: FuelElement,
   renderer: Renderer,
-  createStem: () => Stem,
-  mountCallbacks: FuelComponent<any, any>[]) {
+  createStem: () => Stem) {
   let createdDomTreeRoot: FuelDOMNode;
 
   if (FuelElementView.isComponent(fuelElement)) {
-    fuelElement = renderComponent(fuelElement, createStem, mountCallbacks);
+    [fuelElement, context] = renderComponent(context, fuelElement, createStem);
     if (!fuelElement) {
       return null;
     }
   }
 
-  const stack = makeInitialDomTreeStack(rootElement, fuelElement);
+  const stack = makeInitialDomTreeStack(context || {}, rootElement, fuelElement);
 
 
-  while (stack.length) {
+  LOOP: while (stack.length) {
     const next = stack.pop();
     const hasChildren = !!next.children.length;
 
@@ -85,7 +88,9 @@ export function fastCreateDomTree(
       }
 
       if (parent) {
+        FuelElementView.invokeWillMount(next.element);
         parent.appendChild(next.dom);
+        FuelElementView.invokeDidMount(next.element);
       }
     }
 
@@ -98,22 +103,23 @@ export function fastCreateDomTree(
         root = child;
       }
 
+      let {context} = next;
       while (FuelElementView.isComponent(child)) {
         root = child;
-        child = renderComponent(child, createStem, mountCallbacks);
+        [child, context] = renderComponent(next.context, child, createStem);
         if (!child) {
-          continue;
+          continue LOOP;
         }
       }
-      stack.push({element: child, children: child.children.slice(), dom: null, parent: next.dom, parentElement: next.element, root});
+      stack.push({element: child, children: child.children.slice(), dom: null, parent: next.dom, parentElement: next.element, root, context});
     }
   }
   return createdDomTreeRoot;
 }
 
 
-function renderComponent(fuelElement: FuelElement, createStem: () => Stem, mountCallbacks: FuelComponent<any, any>[]) {
-  const nodes = FuelElementView.instantiateComponent(fuelElement, null, mountCallbacks);
+function renderComponent(oldContext: any, fuelElement: FuelElement, createStem: () => Stem) {
+  const [nodes, context] = FuelElementView.instantiateComponent(oldContext, fuelElement, null);
   fuelElement._stem.registerOwner(nodes);
-  return nodes;
+  return [nodes, context];
 }

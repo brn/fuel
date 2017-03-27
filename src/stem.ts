@@ -22,6 +22,7 @@ import {
   SharedEventHandler,
   Stem,
   FuelComponent,
+  FuelComponentStatic,
   ExportProperites,
   CONVERSATION_TABLE
 } from './type';
@@ -52,11 +53,13 @@ import {
 import {
   invariant,
   requestAnimationFrame,
-  requestIdleCallback
+  requestIdleCallback,
+  merge
 } from './util';
 
 
 type PatchStackType = {
+  context: any,
   newElement: FuelElement,
   oldElement: FuelElement,
   newChildren: FuelElement[],
@@ -84,7 +87,7 @@ function replaceElement(root: FuelElement, oldElement: FuelElement, newElement: 
   if (!isKeyedItems) {
     const parent = oldElement.dom.parentNode;
     parent.replaceChild(newDom, oldDom);
-    clean(root, oldElement, false);
+    clean(root, oldElement);
   } else {
     const parent = oldElement.dom.parentNode;
     parent.removeChild(oldDom);
@@ -128,22 +131,22 @@ function updateElement(diff: Difference, newElement: FuelElement) {
 
 
 interface Batch {
-  mountCallbacks: FuelComponent<any, any>[],
   root: FuelElement,
   parent: FuelElement,
   newElement: FuelElement,
   oldElement: FuelElement,
   isKeyedItem: boolean,
-  difference: Difference
+  difference: Difference,
+  context: any;
 }
 
 
-function clean(rootElement: FuelElement, fuelElement: FuelElement, remove = true) {
-  requestIdleCallback(() => doClean(rootElement, fuelElement, remove));
+function clean(rootElement: FuelElement, fuelElement: FuelElement) {
+  requestIdleCallback(() => doClean(rootElement, fuelElement));
 }
 
 
-function doClean(rootElement: FuelElement, fuelElement: FuelElement, remove = true) {
+function doClean(rootElement: FuelElement, fuelElement: FuelElement) {
   const stack = [
     {
       element: fuelElement,
@@ -162,9 +165,6 @@ function doClean(rootElement: FuelElement, fuelElement: FuelElement, remove = tr
       if (next.element._subscriptions) {
         next.element._subscriptions.forEach(s => s.unsubscribe());
       }
-      if (remove) {
-        next.dom.parentNode.removeChild(next.dom);
-      }
       next.dom = null;
     }
     if (next.children.length) {
@@ -176,34 +176,46 @@ function doClean(rootElement: FuelElement, fuelElement: FuelElement, remove = tr
 }
 
 
-function update({parent, newElement, oldElement, isKeyedItem, difference, root, mountCallbacks}: Batch) {
+function update({parent, newElement, oldElement, isKeyedItem, difference, root, context}: Batch) {
   const {renderer} = FuelStem;
   if (isNewElement(difference)) {
     if (parent) {
-      parent.dom.appendChild(fastCreateDomTree(root, newElement, renderer, createStem, mountCallbacks))
+      FuelElementView.invokeWillMount(newElement);
+      parent.dom.appendChild(fastCreateDomTree(context, root, newElement, renderer, createStem))
+      FuelElementView.invokeDidMount(newElement);
     } else {
-      const tree = fastCreateDomTree(root, newElement, renderer, createStem, mountCallbacks);
+      const tree = fastCreateDomTree(context, root, newElement, renderer, createStem);
       if (oldElement) {
+        FuelElementView.invokeWillMount(newElement);
         oldElement.dom.parentNode.appendChild(tree);
-        clean(root, oldElement, false);
+        FuelElementView.invokeDidMount(newElement);
+        FuelElementView.invokeWillUnmount(oldElement);
+        clean(root, oldElement);
       }
     }
   } else if (isRemoveElement(difference)) {
+    FuelElementView.invokeWillUnmount(oldElement);
+    oldElement.dom.parentNode.removeChild(oldElement.dom);
     clean(root, oldElement);
   } else if (isReplaceElement(difference)) {
+    FuelElementView.invokeWillMount(newElement);
+    FuelElementView.invokeWillUnmount(oldElement);
     replaceElement(root, oldElement, newElement, isKeyedItem, renderer);
+    FuelElementView.invokeDidMount(newElement);
   } else if (isTextChanged(difference)) {
+    FuelElementView.invokeWillUpdate(newElement);
     newElement.dom = oldElement.dom;
     newElement.dom.textContent = FuelElementView.getTextValueOf(newElement);
+    FuelElementView.invokeDidUpdate(newElement);
   } else {
+    FuelElementView.invokeWillUpdate(newElement);
     copyElementRef(root, oldElement, newElement, isKeyedItem);
     updateElement(difference, newElement);
+    FuelElementView.invokeDidUpdate(newElement);
   }
 
   if (isCreateChildren(difference)) {
-    fastCreateDomTree(root, newElement, renderer, createStem, mountCallbacks);
-  } else if (isRemoveChildren(difference)) {
-    clean(root, oldElement);
+    fastCreateDomTree(context, root, newElement, renderer, createStem);
   }
 }
 
@@ -216,8 +228,6 @@ export class FuelStem implements Stem {
   private batchs: Batch[] = [];
 
   private batchCallback: () => void = null;
-
-  private mountCallbacks: FuelComponent<any, any>[] = [];
 
   private sharedEventHandler: SharedEventHandler;
 
@@ -242,7 +252,6 @@ export class FuelStem implements Stem {
       if (this.batchs.length) {
         this.batchs.forEach(b => update(b));
         this.batchs.length = 0;
-        this.notifyComponentDidUpdate();
         this.batchCallback && this.batchCallback();
         this.batchCallback = null;
       }
@@ -268,8 +277,7 @@ export class FuelStem implements Stem {
   }
 
   private attach(el: FuelElement) {
-    const domTree = fastCreateDomTree(el, el, FuelStem.renderer, createStem, this.mountCallbacks);
-    this.notifyComponentDidMount();
+    const domTree = fastCreateDomTree({}, el, el, FuelStem.renderer, createStem);
     if (FuelElementView.isComponent(el)) {
       this.tree = el._componentRenderedElementTreeCache;
     } else {
@@ -278,22 +286,11 @@ export class FuelStem implements Stem {
     return domTree;
   }
 
-  private notifyComponentDidUpdate() {
-    this.mountCallbacks.forEach(v => v[ExportProperites.componentDidUpdate]());
-    this.mountCallbacks.length = 0;
-  }
-
-  private notifyComponentDidMount() {
-    this.mountCallbacks.forEach(v => v[ExportProperites.componentDidMount]());
-    this.mountCallbacks.length = 0;
-  }
-
   private patch(root: FuelElement) {
     if (this.batchs.length) {
       this.batchs.length = 0;
     }
 
-    const mountCallbacks = [];
     const stack: PatchStackType[] = [
       {
         newElement: root,
@@ -302,15 +299,18 @@ export class FuelStem implements Stem {
         oldChildren: null,
         parsed: false,
         difference: null,
+        context: {},
         root
       }
     ];
 
     let parent: PatchStackType = null;
     let isKeyedItem = false;
+    let context = stack[0].context;
 
     if (FuelElementView.isComponent(root)) {
-      root = FuelElementView.instantiateComponent(root, this.tree, mountCallbacks);
+      [root, context] = FuelElementView.instantiateComponent(context, root, this.tree);
+      stack[0].context = context;
       stack[0].newElement = root;
     }
 
@@ -324,13 +324,13 @@ export class FuelStem implements Stem {
         difference = diff(oldElement, newElement);
         next.difference = difference;
         this.batchs.push({
-          mountCallbacks: this.mountCallbacks,
           root: currentRoot,
           parent: parent? parent.newElement: null,
           newElement,
           oldElement,
           isKeyedItem,
-          difference
+          difference,
+          context: next.context
         });
 
         next.newChildren = newElement? newElement.children.slice(): [];
@@ -366,6 +366,7 @@ export class FuelStem implements Stem {
           currentRoot = newChild;
         }
 
+        context = next.context;
         if (newChild && FuelElementView.isComponent(newChild)) {
           if (oldChild && FuelElementView.isComponent(oldChild)) {
             while (FuelElementView.isComponent(newChild)) {
@@ -375,11 +376,12 @@ export class FuelStem implements Stem {
                 newChild._stem = oldChild._stem;
                 oldChild = oldChild._componentRenderedElementTreeCache;
               }
-              newChild = FuelElementView.instantiateComponent(newChild, null, mountCallbacks);
+              [newChild, context] = FuelElementView.instantiateComponent(context, newChild);
             }
           } else {
             while (FuelElementView.isComponent(newChild)) {
-              const renderedTree = FuelElementView.instantiateComponent(newChild, null, mountCallbacks);
+              const [renderedTree, newContext] = FuelElementView.instantiateComponent(context, newChild, null);
+              context = newContext;
               newChild._stem.registerOwner(newChild);
               newChild = renderedTree;
             }
@@ -397,7 +399,8 @@ export class FuelStem implements Stem {
           oldChildren: null,
           parsed: false,
           difference: null,
-          root: currentRoot
+          root: currentRoot,
+          context
         });
       }
     }

@@ -21,7 +21,6 @@ export declare class FuelStem implements Stem {
     private tree;
     private batchs;
     private batchCallback;
-    private mountCallbacks;
     private sharedEventHandler;
     registerOwner(owner: FuelElement): void;
     owner(): FuelElement;
@@ -30,7 +29,5 @@ export declare class FuelStem implements Stem {
     private renderAtAnimationFrame();
     render(el: FuelElement, callback?: (el: Node) => void): void;
     private attach(el);
-    private notifyComponentDidUpdate();
-    private notifyComponentDidMount();
     private patch(root);
 }

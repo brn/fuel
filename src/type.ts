@@ -106,6 +106,24 @@ export interface FuelElement {
 }
 
 
+export interface ReactCompatiblePropsTypes {
+  array: Object;
+  bool: Object;
+  func: Object;
+  number: Object;
+  object: Object;
+  string: Object;
+  symbol: Object;
+  node: Object;
+  instanceOf(...args: any[]): Object;
+  oneOf(...args: any[]): Object;
+  oneOfType(...args: any[]): Object;
+  arrayOf(...args: any[]): Object;
+  objectOf(...args: any[]): Object;
+  shape(...args: any[]): Object;
+}
+
+
 export interface AttributesMap {
   [key: string]: any;
 }
@@ -127,7 +145,7 @@ export enum BuiltinElementValue {
 
 
 export interface FuelComponentStatic<Props, State> {
-  new(props: Props): FuelComponent<Props, State>
+  new(props: Props, context: any): FuelComponent<Props, State>;
 }
 
 
@@ -135,6 +153,7 @@ export interface FuelComponent<Props, State> {
   props: Props;
   state?: State;
   refs?: {[key:string]: FuelComponent<any, any>|Element};
+  componentWillUnmount(): void;
   componentWillMount(): void;
   componentDidMount(): void;
   componentWillUpdate(): void;
@@ -143,12 +162,14 @@ export interface FuelComponent<Props, State> {
   render(): FuelElement;
   shouldComponentUpdate(nextProps: Props, prevProps: Props): boolean;
   setState(s: State, cb?: () => void): void;
+  getChildContext(): any;
 }
 
 export const ExportProperites = {
   'props': 'props',
   'state': 'state',
   'refs': 'refs',
+  'componentWillUnmount': 'componentWillUnmount',
   'componentWillMount': 'componentWillMount',
   'componentDidMount': 'componentDidMount',
   'componentWillUpdate': 'componentWillUpdate',
@@ -162,7 +183,7 @@ export const ExportProperites = {
 }
 
 export interface StatelessComponent<Props> {
-  (props: Props): FuelElement;
+  (props: Props, context: any): FuelElement;
 }
 
 

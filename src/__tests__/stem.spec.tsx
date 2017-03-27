@@ -127,7 +127,7 @@ describe('stem', () => {
           done();
         });
       });
-    })
+    });
 
     it('update with component', done => {
       let flag = true;
@@ -181,7 +181,7 @@ describe('stem', () => {
           try {
             expect(n.toString()).to.be.eq('<div data-id="1" class="foobar"><span data-id="1" class="foobar-baz"><a data-id="1" href="javascript:void(0)">This is A tag.</a></span><ul data-id="1" class="foobar-baz"><li data-id="1"><span data-id="1" class="foobar-baz-false"><a data-id="1" href="javascript:void(0)">bar</a></span></li><li data-id="1">Changed!</li></ul></div>');
           } catch(e) {
-            return done(e)
+            return done(e);
           }
           done();
         });
@@ -240,7 +240,6 @@ describe('stem', () => {
             </div>
             );
       const s = new FuelStem();
-
       s.render(ret, n => {
         expect(n.toString()).to.be.eq('<div data-id="1" class="foobar"><span data-id="1" class="foobar-baz"><a data-id="1" href="javascript:void(0)">This is A tag.</a></span><ul data-id="1" class="foobar-baz"><li data-id="1"><span data-id="1" class="foobar-baz-true"><a data-id="1" href="javascript:void(0)">bar</a></span></li><li data-id="1"><span data-id="1" class="foobar-baz"><a data-id="1" href="javascript:void(0)">baz</a></span></li></ul></div>');
         props.value = false;
@@ -289,6 +288,65 @@ describe('stem', () => {
         s.render(ret, n => {
           try {
             expect(n.toString()).to.be.eq('<div data-id="1" class="foobar"><span data-id="1" class="foobar-baz"><a data-id="1" href="javascript:void(0)">This is A tag.</a></span><div data-id="1"><ul data-id="1" class="foobar-baz"><li data-id="1"><span data-id="1" class="foobar-baz-false"><a data-id="1" href="javascript:void(0)">bar</a></span></li><li data-id="1">Changed!</li></ul></div></div>');
+          } catch(e) {
+            return done(e)
+          }
+          done();
+        });
+      });
+    });
+
+    class ContextComponent extends Fuel.Component<any, any> {
+      render() {
+        return (
+          <div>
+            {this.props.children}
+          </div>
+        );
+      }
+      getChildContext() {return {className: this.props.flag.value? 'context-class-name': 'context-class-name-updated'}}
+    }
+
+    class InnerComponent extends Fuel.Component<any, any> {
+      public context: any;
+      render() {
+        return (
+          <span className={this.context.className}>
+          </span>
+        );
+      }
+    }
+
+    it('update with context', done => {
+      const props = {value: true};
+      let ret = (
+        <div className="foobar">
+          <span className="foobar-baz">
+            <a href="javascript:void(0)">This is A tag.</a>
+          </span>
+          <ContextComponent flag={props}>
+            <InnerComponent/>
+          </ContextComponent>
+        </div>
+      );
+      const s = new FuelStem();
+
+      s.render(ret, n => {
+        expect(n.toString()).to.be.eq('<div data-id="1" class="foobar"><span data-id="1" class="foobar-baz"><a data-id="1" href="javascript:void(0)">This is A tag.</a></span><div data-id="1"><span data-id="1" class="context-class-name"></span></div></div>');
+        props.value = false;
+        ret = (
+          <div className="foobar">
+            <span className="foobar-baz">
+              <a href="javascript:void(0)">This is A tag.</a>
+            </span>
+            <ContextComponent flag={props}>
+              <InnerComponent/>
+            </ContextComponent>
+          </div>
+        );
+        s.render(ret, n => {
+          try {
+            expect(n.toString()).to.be.eq('<div data-id="1" class="foobar"><span data-id="1" class="foobar-baz"><a data-id="1" href="javascript:void(0)">This is A tag.</a></span><div data-id="1"><span data-id="1" class="context-class-name-updated"></span></div></div>');
           } catch(e) {
             return done(e)
           }

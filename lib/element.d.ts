@@ -14,7 +14,7 @@
  * @fileoverview
  * @author Taketoshi Aono
  */
-import { FuelElement, Property, FuelComponent, FuelComponentType, Stem } from './type';
+import { FuelElement, Property, FuelComponentType, Stem } from './type';
 import { Renderer } from './renderer/renderer';
 export declare class FuelElementView {
     static allocateTextTagName(): number;
@@ -29,7 +29,12 @@ export declare class FuelElementView {
     static getTextValueOf(fuelElement: FuelElement): string;
     static getComponentRenderedTree(fuelElement: FuelElement): FuelElement;
     static getProps({props, children}: FuelElement, isInsertChildren?: boolean): Object;
-    static instantiateComponent(fuelElement: FuelElement, oldElement?: FuelElement, mountCallbacks?: FuelComponent<any, any>[]): any;
+    static invokeDidMount(el: FuelElement): void;
+    static invokeWillMount(el: FuelElement): void;
+    static invokeWillUpdate(el: FuelElement): void;
+    static invokeDidUpdate(el: FuelElement): void;
+    static invokeWillUnmount(el: FuelElement): void;
+    static instantiateComponent(context: any, fuelElement: FuelElement, oldElement?: FuelElement): any[];
     static createDomElement(rootElement: FuelElement, fuelElement: FuelElement, renderer: Renderer, createStem: () => Stem): any;
 }
 export declare function cloneElement(fuelElement: FuelElement, props: any, children?: (FuelElement | string | number)[]): any;

@@ -6,7 +6,8 @@
   "scripts": {
     "release": "gulp release",
     "minify": "gulp",
-    "test": "gulp test-chrome",
+    "ut": "gulp test-chrome",
+    "ut+ct": "gulp test-all",
     "ct": "gulp ct-chrome"
   },
   "author": "brn (Taketoshi Aono)",

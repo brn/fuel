@@ -84,6 +84,22 @@ export interface FuelElement {
     };
     _subscriptions?: ESSubscription[];
 }
+export interface ReactCompatiblePropsTypes {
+    array: Object;
+    bool: Object;
+    func: Object;
+    number: Object;
+    object: Object;
+    string: Object;
+    symbol: Object;
+    node: Object;
+    instanceOf(...args: any[]): Object;
+    oneOf(...args: any[]): Object;
+    oneOfType(...args: any[]): Object;
+    arrayOf(...args: any[]): Object;
+    objectOf(...args: any[]): Object;
+    shape(...args: any[]): Object;
+}
 export interface AttributesMap {
     [key: string]: any;
 }
@@ -97,7 +113,7 @@ export declare enum BuiltinElementValue {
     CHILDREN = 2,
 }
 export interface FuelComponentStatic<Props, State> {
-    new (props: Props): FuelComponent<Props, State>;
+    new (props: Props, context: any): FuelComponent<Props, State>;
 }
 export interface FuelComponent<Props, State> {
     props: Props;
@@ -105,6 +121,7 @@ export interface FuelComponent<Props, State> {
     refs?: {
         [key: string]: FuelComponent<any, any> | Element;
     };
+    componentWillUnmount(): void;
     componentWillMount(): void;
     componentDidMount(): void;
     componentWillUpdate(): void;
@@ -113,11 +130,13 @@ export interface FuelComponent<Props, State> {
     render(): FuelElement;
     shouldComponentUpdate(nextProps: Props, prevProps: Props): boolean;
     setState(s: State, cb?: () => void): void;
+    getChildContext(): any;
 }
 export declare const ExportProperites: {
     'props': string;
     'state': string;
     'refs': string;
+    'componentWillUnmount': string;
     'componentWillMount': string;
     'componentDidMount': string;
     'componentWillUpdate': string;
@@ -130,7 +149,7 @@ export declare const ExportProperites: {
     "Symbol": string;
 };
 export interface StatelessComponent<Props> {
-    (props: Props): FuelElement;
+    (props: Props, context: any): FuelElement;
 }
 export declare const CONVERSATION_TABLE: {
     'className': string;

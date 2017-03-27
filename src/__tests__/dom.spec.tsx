@@ -77,6 +77,41 @@ describe('FuelDOM', () => {
       });
     });
 
+    it('update context', done => {
+      class ContextComponent extends Fuel.Component<any, any> {
+        state = {className: 'context-class-name'}
+        render() {
+          return (
+            <div className="target" onClick={e => this.handleClick()}>
+              {this.props.children}
+            </div>
+          );
+        }
+        getChildContext() {return this.state}
+        handleClick() {
+          this.setState({className: 'context-updated-class-name'});
+        }
+      }
+
+      class InnerComponent extends Fuel.Component<any, any> {
+        public context: any;
+        render() {
+          return (
+            <span ref="span" className={this.context.className}>
+            </span>
+          );
+        }
+        componentDidUpdate() {
+          expect(this.refs['span']['className']).to.be.eq('context-updated-class-name');
+          done();
+        }
+      }
+
+      FuelDOM.render(<ContextComponent><InnerComponent/></ContextComponent>, dom, (tree: HTMLElement) => {
+        tree.click();
+      });
+    });
+
     it('render only internal component', done => {
       class Component extends Fuel.Component<any, any> {
         public state = {value: 2};

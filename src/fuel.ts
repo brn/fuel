@@ -25,7 +25,8 @@ import {
   StatelessComponent,
   FuelComponentStatic,
   FuelNode,
-  ExportProperites
+  ExportProperites,
+  ReactCompatiblePropsTypes
 } from './type';
 import {
   FuelStem
@@ -95,10 +96,16 @@ const VALID_TYPES = {'string': 1, 'function': 1};
 
 
 export class ComponentImpl<Props, State> implements FuelComponent<Props, State> {
-  constructor(private _props: Props = {} as any) {
+  constructor(private _props: Props = {} as any, private _context = {}) {
   }
 
+  public refs?: {[key:string]: FuelComponent<any, any>|Element} = {};
+
   public get ['props']() {return this._props}
+
+  public get ['context']() {return this._context;}
+
+  public ['componentWillUnmount']() {}
 
   public ['componentWillMount']() {}
 
@@ -191,6 +198,7 @@ export class Fuel {
    */
   public static Component = ComponentImpl;
 
+  // React compatibility layer.
   public static PureComponent = PureComponentImpl;
 
   public static isValidElement = (el: any) => el? FuelElementView.isFuelElement(el): false
@@ -209,7 +217,14 @@ export class Fuel {
     count(children: FuelElement[]|null) {return children? children.length: 0;},
     toArray(children: FuelElement[]|null) {return children? children: [];}
   }
+
+  // Compatible with react.
+  public static PropTypes: ReactCompatiblePropsTypes = {} as any
 }
+
+
+'array bool func number object string symbol node'.split(' ').forEach(a => Fuel.PropTypes[a] = {});
+'instanceOf oneOf, oneOfType, arrayOf objectOf shape'.split(' ').forEach(a => Fuel.PropTypes[a] = () => ({}));
 
 
 /**

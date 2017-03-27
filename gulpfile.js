@@ -259,6 +259,17 @@ gulp.task('publish', () => {
 gulp.task('release', () => {
   const runSequence = require('run-sequence');
   return runSequence(
+    'test-all',
+    'clean',
+    'minify',
+    'publish'
+  );
+});
+
+
+gulp.task('test-all', () => {
+  const runSequence = require('run-sequence');
+  return runSequence(
     'clean',
     'bundle-all-tests',
     'run-test-chrome',
@@ -266,10 +277,7 @@ gulp.task('release', () => {
     'minify',
     'local-install',
     'bundle-ct',
-    'run-test-chrome',
-    'clean',
-    'minify',
-    'publish'
+    'run-test-chrome'
   );
 });
 

@@ -66,6 +66,17 @@ export function invariant(condition: any, message: string, warn = false) {
   }
 }
 
+export function merge<T extends {[key: string]: any}, U extends {[key: string]: any}>(a: T, b: U): T & U {
+  const ret = {} as T & U;
+  for (const key in a) {
+    ret[key] = a[key];
+  }
+  for (const key in b) {
+    ret[key] = b[key];
+  }
+  return ret;
+}
+
 const HAS_REQUEST_ANIMATION_FRAME = typeof g.requestAnimationFrame === 'function';
 export const requestAnimationFrame = HAS_REQUEST_ANIMATION_FRAME? cb => g.requestAnimationFrame(cb): cb => setTimeout(cb, 60)
 

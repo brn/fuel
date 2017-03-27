@@ -14,13 +14,19 @@
  * @fileoverview
  * @author Taketoshi Aono
  */
-import { FuelElement, FuelComponent, StatelessComponent, FuelComponentStatic, FuelNode } from './type';
+import { FuelElement, FuelComponent, StatelessComponent, FuelComponentStatic, FuelNode, ReactCompatiblePropsTypes } from './type';
 import { cloneElement } from './element';
 import { HTMLAttributes } from './dom-attr';
 export declare class ComponentImpl<Props, State> implements FuelComponent<Props, State> {
     private _props;
-    constructor(_props?: Props);
+    private _context;
+    constructor(_props?: Props, _context?: {});
+    refs?: {
+        [key: string]: FuelComponent<any, any> | Element;
+    };
     readonly ['props']: Props;
+    readonly ['context']: {};
+    ['componentWillUnmount'](): void;
     ['componentWillMount'](): void;
     ['componentDidMount'](): void;
     ['componentWillUpdate'](): void;
@@ -69,6 +75,7 @@ export declare class Fuel {
         count(children: FuelElement[]): number;
         toArray(children: FuelElement[]): FuelElement[];
     };
+    static PropTypes: ReactCompatiblePropsTypes;
 }
 /**
  * Reactjs compatible definitions.
