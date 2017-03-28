@@ -18,6 +18,10 @@
 
 import {
   FuelElement,
+  BuiltinFuelElement,
+  StatelessFuelElement,
+  ComponentFuelElement,
+  FactoryFuelElement,
   BuiltinElementValue,
   TextTable,
   BufferType,
@@ -42,7 +46,8 @@ import {
   makeBuffer,
   setBuffer,
   Symbol,
-  merge
+  merge,
+  invariant
 } from './util';
 import {
   SharedEventHandlerImpl
@@ -75,32 +80,32 @@ export class FuelElementView {
     return TAG_NAMES.count++;
   }
 
-  public static isComponent(fuelElement: FuelElement): boolean {
+  public static isComponent(fuelElement: FuelElement): fuelElement is FactoryFuelElement {
     return typeof fuelElement.type !== 'number';
   }
 
-  public static isStatelessComponent(fuelElement: FuelElement): boolean {
+  public static isStatelessComponent(fuelElement: FuelElement): fuelElement is StatelessFuelElement {
     return typeof fuelElement.type === 'function' && typeof (fuelElement.type as Function).prototype.render !== 'function';
+  }
+
+  public static isComponentClass(fuelElement: FuelElement): fuelElement is ComponentFuelElement {
+    return typeof fuelElement.type === 'function' && typeof (fuelElement.type as Function).prototype.render === 'function';
   }
 
   public static tagNameOf(fuelElement: FuelElement): string {
     return TAG_NAMES.map[String(fuelElement.type)];
   }
 
-  public static tagTypeOf(fuelElement: FuelElement): number {
-    return fuelElement.type as number;
-  }
-
   public static hasChildren(el: FuelElement): boolean {
     return el.children.length > 0;
   }
 
-  public static isFuelElement(fuelElement: FuelElement) {
+  public static isFuelElement(fuelElement: any): fuelElement is FuelElement {
     return fuelElement && fuelElement[FUEL_ELEMENT_MARK] === Bytes.FUEL_ELEMENT_MARK;
   }
 
-  public static isTextNode(fuelElement: FuelElement): boolean {
-    return this.tagTypeOf(fuelElement) === 0;
+  public static isTextNode(fuelElement: FuelElement): fuelElement is BuiltinFuelElement {
+    return fuelElement.type === 0;
   }
 
   public static getTextValueOf(fuelElement: FuelElement): string {
@@ -123,80 +128,132 @@ export class FuelElementView {
     return attrs;
   }
 
-  public static invokeDidMount(el: FuelElement) {
+  public static invokeDidMount(el: FuelElement): void {
     if (el._componentInstance) {
       el._componentInstance.componentDidMount();
     }
   }
 
-  public static invokeWillMount(el: FuelElement) {
+  public static invokeWillMount(el: FuelElement): void {
     if (el._componentInstance) {
       el._componentInstance.componentWillMount();
     }
   }
 
-  public static invokeWillUpdate(el: FuelElement) {
+  public static invokeWillUpdate(el: FuelElement): void {
     if (el._componentInstance) {
       el._componentInstance.componentWillUpdate();
     }
   }
 
-  public static invokeDidUpdate(el: FuelElement) {
+  public static invokeDidUpdate(el: FuelElement): void {
     if (el._componentInstance) {
       el._componentInstance.componentDidUpdate();
     }
   }
 
-  public static invokeWillUnmount(el: FuelElement) {
+  public static invokeWillUnmount(el: FuelElement): void {
     if (el._componentInstance) {
       el._componentInstance.componentWillUnmount();
     }
   }
 
-  public static instantiateComponent(context: any, fuelElement: FuelElement, oldElement?: FuelElement) {
-    const {props, type} = fuelElement
+  public static stripComponent(fuelElement: FuelElement) {
+    while (fuelElement && this.isComponent(fuelElement)) {
+      fuelElement = fuelElement._componentRenderedElementTreeCache;
+    }
+    return fuelElement;
+  }
+
+  public static instantiateComponent(context: any, fuelElement: FactoryFuelElement, oldElement?: FuelElement): [FuelElement, any] {
+    const {props} = fuelElement
     const attrs = this.getProps(fuelElement, true);
     const oldAttrs = oldElement? this.getProps(oldElement): null;
     if (this.isStatelessComponent(fuelElement)) {
-      return [(type as StatelessComponent<any>)(attrs, context), context];
+      return [fuelElement.type(attrs, context), context];
     }
 
-    let instance: FuelComponent<Phai, Phai> = fuelElement._componentInstance;
-    let callReceiveHook = !!instance;
-    if (!instance) {
-      instance = fuelElement._componentInstance = new (type as FuelComponentStatic<Phai, Phai>)(attrs, context);
+    if (this.isComponentClass(fuelElement)) {
+      let instance: FuelComponent<Phai, Phai> = fuelElement._componentInstance;
+      let callReceiveHook = !!instance;
+      if (!instance) {
+        instance = fuelElement._componentInstance = new fuelElement.type(attrs, context);
+      } else {
+        if ((instance as any)._context) {
+          (instance as any)._context = context;
+        }
+      }
+
       instance.setState = function(state, cb) {
-        this.state = state;
+        this.state = merge(this.state, state);
         this[ExportProperites.componentWillUpdate]();
-        fuelElement._stem.render(fuelElement, () => {
+        const tree = this.render();
+        fuelElement._stem.render(tree, () => {
+          fuelElement._componentRenderedElementTreeCache = tree;
           cb && cb();
+        }, false);
+      }
+
+      const newContext = merge(context, instance.getChildContext());
+
+      if (fuelElement._componentRenderedElementTreeCache && !instance[ExportProperites.shouldComponentUpdate](attrs, oldAttrs)) {
+        if (callReceiveHook) {
+          fuelElement._stem.enterUnsafeUpdateZone(() => {
+            instance.componentWillReceiveProps(attrs);
+            (instance as any)._props = attrs;
+          });
+        }
+        return [fuelElement._componentRenderedElementTreeCache, newContext];
+      }
+
+      if (callReceiveHook) {
+        fuelElement._stem.enterUnsafeUpdateZone(() => {
+          instance.componentWillReceiveProps(attrs);
+          (instance as any)._props = attrs;
         });
       }
-    } else {
-      if ((instance as any)._context) {
-        (instance as any)._context = context;
+
+      const rendered: FuelElement = fuelElement._componentRenderedElementTreeCache = instance[ExportProperites.render]();
+      // If rendered component was FuelComponent,
+      // _componentInstance must not to be setted.
+      if (rendered) {
+        if (!this.isComponent(rendered)) {
+          rendered._componentInstance = instance;
+        }
+        rendered._stem = fuelElement._stem;
       }
+      return [rendered, newContext];
     }
 
-    const newContext = merge(context, instance.getChildContext())
+    invariant(true, `factory element requried but got ${this.tagNameOf(fuelElement)}.`);
+  }
 
-    if (fuelElement._componentRenderedElementTreeCache && !instance[ExportProperites.shouldComponentUpdate](attrs, oldAttrs)) {
-      if (callReceiveHook) {
-        instance.componentWillReceiveProps(attrs);
-      }
-      return [fuelElement._componentRenderedElementTreeCache, newContext];
+  public static removeEvent(rootElement: FuelElement, fuelElement: FuelElement, type) {
+    let handler = rootElement._stem.getEventHandler();
+    invariant(!handler, 'SharedEventHandler must be exists');
+    const root = this.stripComponent(rootElement);
+    handler.removeEvent(root.dom, fuelElement.dom, type);
+  }
+
+  public static replaceEvent(rootElement: FuelElement, fuelElement: FuelElement, type, fn: (e: Event) => void) {
+    let handler = rootElement._stem.getEventHandler();
+    invariant(!handler, 'SharedEventHandler must be exists');
+    const root = this.stripComponent(rootElement);
+    handler.replaceEvent(root.dom, fuelElement.dom, type, fn);
+  }
+
+  public static addEvent(rootElement: FuelElement, fuelElement: FuelElement, type, eventHandler) {
+    let handler = rootElement._stem.getEventHandler();
+    if (!handler) {
+      handler = new SharedEventHandlerImpl();
+      rootElement._stem.setEventHandler(handler);
     }
-    const rendered = fuelElement._componentRenderedElementTreeCache = instance[ExportProperites.render]();
-    // If rendered component was FuelComponent,
-    // _componentInstance must not to be setted.
-    if (rendered && !this.isComponent(rendered)) {
-      rendered._componentInstance = instance;
-    }
-    return [rendered, newContext];
+    const root = this.stripComponent(rootElement);
+    handler.addEvent(root.dom, fuelElement.dom, type, eventHandler);
   }
 
   public static createDomElement(rootElement: FuelElement, fuelElement: FuelElement, renderer: Renderer, createStem: () => Stem) {
-    if (this.tagTypeOf(fuelElement) === 0) {
+    if (fuelElement.type === 0) {
       return fuelElement.dom = renderer.createTextNode(this.getTextValueOf(fuelElement)) as any;
     }
 
@@ -212,12 +269,10 @@ export class FuelElementView {
     for (let i = 0, len = props.length; i < len; i++) {
       let {name, value} = props[i];
       if (DOMEvents[name]) {
-        let handler = rootElement._stem.getEventHandler();
-        if (!handler) {
-          handler = new SharedEventHandlerImpl();
-          rootElement._stem.setEventHandler(handler);
-        }
-        handler.addEvent(this.isComponent(rootElement)? rootElement._componentRenderedElementTreeCache.dom: rootElement.dom, dom, name, value);
+        this.addEvent(rootElement, fuelElement, name, value);
+        continue;
+      } else if (name === 'checked' || name === 'selected') {
+        booleanAttr(dom, name, value);
         continue;
       } else if (name === 'scoped') {
         isScoped = true;
@@ -240,11 +295,23 @@ export class FuelElementView {
         }
         continue;
       }
+      if (name === 'htmlFor') {
+        name = 'for';
+      }
       if (DOMAttributes[name] || name.indexOf('data-') === 0) {
         dom[name] = value;
       }
     }
     return dom;
+  }
+}
+
+
+function booleanAttr(el: FuelDOMNode, name: string, value: boolean) {
+  if (value) {
+    el[name] = name;
+  } else {
+    el.removeAttribute(name);
   }
 }
 
@@ -265,41 +332,15 @@ function mergeProps(oldP: Property[], p: any) {
 }
 
 
-export function cloneElement(fuelElement: FuelElement, props: any, children: (FuelElement|string|number)[] = []) {
-  const stack = [
-    {
-      element: fuelElement,
-      children: fuelElement.children.slice(),
-      parent: null,
-      parsed: false
-    }
-  ];
-  let root;
-  while (stack.length) {
-    const next = stack.pop();
-    const {parsed, element, parent} = next;
-    let newEl;
-    if (!parsed) {
-      next.parsed = true;
-      newEl = makeFuelElement(element.type, element.key, mergeProps(element.props.slice(), props), children as any);
-      for (const key in element) {
-        newEl[key] = element;
-      }
-      newEl.dom = null;
-
-      if (parent) {
-        parent.children.push(newEl);
-      } else {
-        root = newEl;
-      }
-    }
-    if (next.children.length) {
-      const child = next.children.shift();
-      stack.push(next);
-      stack.push({element: child, children: child.children.slice(), parent: newEl || parent, parsed: false});
-    }
-  }
-  return root;
+export function cloneElement(fuelElement: FuelElement, props: any = {}, children: FuelElement[] = fuelElement.children) {
+  invariant(!FuelElementView.isFuelElement(fuelElement), `cloneElement only clonable FuelElement but got = ${fuelElement}`);
+  const el = makeFuelElement(fuelElement.type, fuelElement.key, mergeProps(fuelElement.props.slice(), props), children);
+  el._stem = fuelElement._stem;
+  el._componentInstance = fuelElement._componentInstance
+  el._componentRenderedElementTreeCache = fuelElement._componentRenderedElementTreeCache;
+  el._subscriptions = fuelElement._subscriptions;
+  el._parent = fuelElement._parent;
+  return el;
 }
 
 
@@ -327,13 +368,19 @@ function makeStem(fuelElement: FuelElement, name: string, value: any, createStem
 }
 
 
-export function makeFuelElement(type: FuelComponentType, key: string|number, props: Property[], children: FuelElement[] = []): FuelElement {
+export function makeFuelElement(type: FuelComponentType, key: string|number = null, props: Property[], children: FuelElement[] = []): FuelElement {
   return {
-    [FUEL_ELEMENT_MARK]: Bytes.FUEL_ELEMENT_MARK,
+    [FUEL_ELEMENT_MARK]                : Bytes.FUEL_ELEMENT_MARK,
     type,
     key,
     props,
     children,
-    dom: null
+    dom                                : null,
+    _stem                              : null,
+    _componentInstance                 : null,
+    _componentRenderedElementTreeCache : null,
+    _keymap                            : null,
+    _subscriptions                     : null,
+    _parent                            : null
   }
 }

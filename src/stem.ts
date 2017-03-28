@@ -24,7 +24,8 @@ import {
   FuelComponent,
   FuelComponentStatic,
   ExportProperites,
-  CONVERSATION_TABLE
+  CONVERSATION_TABLE,
+  DOMEvents
 } from './type';
 import {
   setStyle
@@ -40,7 +41,6 @@ import {
   AttrState,
   DifferenceBits,
   isCreateChildren,
-  isRemoveChildren,
   isNewElement,
   isRemoveElement,
   isReplaceElement,
@@ -85,11 +85,11 @@ function replaceElement(root: FuelElement, oldElement: FuelElement, newElement: 
   }
 
   if (!isKeyedItems) {
-    const parent = oldElement.dom.parentNode;
+    const parent = newElement._parent.dom;
     parent.replaceChild(newDom, oldDom);
     clean(root, oldElement);
   } else {
-    const parent = oldElement.dom.parentNode;
+    const parent = newElement._parent.dom;
     parent.removeChild(oldDom);
     parent.appendChild(newDom);
   }
@@ -107,14 +107,20 @@ function copyElementRef(root: FuelElement, oldElement: FuelElement, newElement: 
 }
 
 
-function updateElement(diff: Difference, newElement: FuelElement) {
+function updateElement(diff: Difference, rootElement: FuelElement, newElement: FuelElement) {
   const domElement = newElement.dom;
+  const strippedRoot = FuelElementView.stripComponent(rootElement);
   for (let i = 0, len = diff.attr.length; i < len; i++) {
     const {key, value, state} = diff.attr[i];
     switch (state) {
     case AttrState.NEW:
     case AttrState.REPLACED:
-      domElement[key] = value;
+      if (DOMEvents[key]) {
+        const lowerKey = key.slice(2).toLowerCase();
+        FuelElementView.replaceEvent(strippedRoot, newElement, lowerKey, value as any);
+      } else {
+        domElement[key] = value;
+      }
       break;
     case AttrState.STYLE_CHANGED:
       for (const style in value as any) {
@@ -160,7 +166,7 @@ function doClean(rootElement: FuelElement, fuelElement: FuelElement) {
     const next = stack.pop();
     if (next.dom) {
       if (next.dom['__fuelevent']) {
-        next.root._stem.getEventHandler().removeEvent(next.root.dom, next.dom);
+        next.root._stem.getEventHandler().removeEvents(next.root.dom, next.dom);
       }
       if (next.element._subscriptions) {
         next.element._subscriptions.forEach(s => s.unsubscribe());
@@ -187,7 +193,7 @@ function update({parent, newElement, oldElement, isKeyedItem, difference, root, 
       const tree = fastCreateDomTree(context, root, newElement, renderer, createStem);
       if (oldElement) {
         FuelElementView.invokeWillMount(newElement);
-        oldElement.dom.parentNode.appendChild(tree);
+        newElement._parent.dom.appendChild(tree);
         FuelElementView.invokeDidMount(newElement);
         FuelElementView.invokeWillUnmount(oldElement);
         clean(root, oldElement);
@@ -204,13 +210,14 @@ function update({parent, newElement, oldElement, isKeyedItem, difference, root, 
     FuelElementView.invokeDidMount(newElement);
   } else if (isTextChanged(difference)) {
     FuelElementView.invokeWillUpdate(newElement);
-    newElement.dom = oldElement.dom;
-    newElement.dom.textContent = FuelElementView.getTextValueOf(newElement);
+    newElement.dom = FuelElementView.createDomElement(root, newElement, FuelStem.renderer, createStem);
+    parent.dom.appendChild(newElement.dom);
+    parent.dom.removeChild(oldElement.dom);
     FuelElementView.invokeDidUpdate(newElement);
   } else {
     FuelElementView.invokeWillUpdate(newElement);
     copyElementRef(root, oldElement, newElement, isKeyedItem);
-    updateElement(difference, newElement);
+    updateElement(difference, root, newElement);
     FuelElementView.invokeDidUpdate(newElement);
   }
 
@@ -223,6 +230,8 @@ function update({parent, newElement, oldElement, isKeyedItem, difference, root, 
 export class FuelStem implements Stem {
   public static renderer: Renderer;
 
+  private _enabled = true;
+
   private tree: FuelElement;
 
   private batchs: Batch[] = [];
@@ -230,6 +239,12 @@ export class FuelStem implements Stem {
   private batchCallback: () => void = null;
 
   private sharedEventHandler: SharedEventHandler;
+
+  public enterUnsafeUpdateZone(cb: () => void) {
+    this._enabled = false;
+    cb();
+    this._enabled = true;
+  }
 
   public registerOwner(owner: FuelElement) {
     this.tree = owner;
@@ -258,14 +273,17 @@ export class FuelStem implements Stem {
     });
   }
 
-  public render(el: FuelElement, callback: (el: Node) => void = (el => {})) {
+  public render(el: FuelElement, callback: (el: Node) => void = (el => {}), updateOwnwer = true) {
+    if (!this._enabled) {
+      callback(this.tree.dom as any);
+      return;
+    }
+
     FuelStem.renderer.updateId();
     if (this.tree) {
       this.patch(el);
       this.batchCallback = () => {
-        if (FuelElementView.isComponent(el)) {
-          this.tree = el._componentRenderedElementTreeCache;
-        } else {
+        if (updateOwnwer) {
           this.tree = el;
         }
         callback(this.tree.dom as any);
@@ -278,11 +296,7 @@ export class FuelStem implements Stem {
 
   private attach(el: FuelElement) {
     const domTree = fastCreateDomTree({}, el, el, FuelStem.renderer, createStem);
-    if (FuelElementView.isComponent(el)) {
-      this.tree = el._componentRenderedElementTreeCache;
-    } else {
-      this.tree = el;
-    }
+    this.tree = el;
     return domTree;
   }
 
@@ -304,14 +318,31 @@ export class FuelStem implements Stem {
       }
     ];
 
+    if (this.tree._stem) {
+      root._stem = this.tree._stem;
+    }
+
     let parent: PatchStackType = null;
     let isKeyedItem = false;
     let context = stack[0].context;
 
-    if (FuelElementView.isComponent(root)) {
-      [root, context] = FuelElementView.instantiateComponent(context, root, this.tree);
+    let oldTree = this.tree;
+    let newTree = root;
+
+    while (newTree && FuelElementView.isComponent(newTree)) {
+      const [stripedNewTree, newContext] = FuelElementView.instantiateComponent(context, newTree, oldTree);
+      context = newContext;
+      if (oldTree && FuelElementView.isComponent(oldTree)) {
+        oldTree = oldTree._componentRenderedElementTreeCache;
+        stack[0].oldElement = oldTree;
+      }
+      newTree = stripedNewTree;
       stack[0].context = context;
-      stack[0].newElement = root;
+      stack[0].newElement = stripedNewTree;
+    }
+    if (oldTree && FuelElementView.isComponent(oldTree)) {
+      oldTree = FuelElementView.stripComponent(oldTree);
+      stack[0].oldElement = oldTree;
     }
 
     while (stack.length) {
@@ -368,28 +399,32 @@ export class FuelStem implements Stem {
 
         context = next.context;
         if (newChild && FuelElementView.isComponent(newChild)) {
+          newChild._stem.registerOwner(newChild);
           if (oldChild && FuelElementView.isComponent(oldChild)) {
-            while (FuelElementView.isComponent(newChild)) {
-              if (FuelElementView.isComponent(oldChild)) {
-                newChild._componentInstance = oldChild._componentInstance
-                newChild._componentRenderedElementTreeCache = oldChild._componentRenderedElementTreeCache;
-                newChild._stem = oldChild._stem;
-                oldChild = oldChild._componentRenderedElementTreeCache;
-              }
+            newChild._componentInstance = oldChild._componentInstance;
+            newChild._componentRenderedElementTreeCache = oldChild._componentRenderedElementTreeCache;
+            while (oldChild && FuelElementView.isComponent(oldChild)) {
+              oldChild = oldChild._componentRenderedElementTreeCache;
+            }
+
+            while (newChild && FuelElementView.isComponent(newChild)) {
               [newChild, context] = FuelElementView.instantiateComponent(context, newChild);
             }
           } else {
-            while (FuelElementView.isComponent(newChild)) {
+            while (newChild && FuelElementView.isComponent(newChild)) {
               const [renderedTree, newContext] = FuelElementView.instantiateComponent(context, newChild, null);
               context = newContext;
-              newChild._stem.registerOwner(newChild);
               newChild = renderedTree;
             }
           }
         } else if (oldChild && FuelElementView.isComponent(oldChild)) {
-          while (FuelElementView.isComponent(oldChild)) {
+          while (oldChild && FuelElementView.isComponent(oldChild)) {
             oldChild = oldChild._componentRenderedElementTreeCache;
           }
+        }
+
+        if (!newChild && !oldChild) {
+          continue;
         }
 
         stack.push({

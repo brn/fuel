@@ -10,7 +10,6 @@ import {
   isReplaceElement,
   isNewElement,
   isCreateChildren,
-  isRemoveChildren,
   isRemoveElement,
   isTextChanged
 } from '../difference';
@@ -38,7 +37,6 @@ describe('diff', () => {
     expect(isReplaceElement(difference)).to.be.eq(true);
     expect(isNewElement(difference)).to.be.eq(false);
     expect(isCreateChildren(difference)).to.be.eq(false);
-    expect(isRemoveChildren(difference)).to.be.eq(false);
     expect(isRemoveElement(difference)).to.be.eq(false);
   });
 
@@ -49,7 +47,6 @@ describe('diff', () => {
     expect(isReplaceElement(difference)).to.be.eq(false);
     expect(isNewElement(difference)).to.be.eq(true);
     expect(isCreateChildren(difference)).to.be.eq(false);
-    expect(isRemoveChildren(difference)).to.be.eq(false);
     expect(isRemoveElement(difference)).to.be.eq(false);
   });
 
@@ -60,7 +57,6 @@ describe('diff', () => {
     expect(isReplaceElement(difference)).to.be.eq(false);
     expect(isNewElement(difference)).to.be.eq(false);
     expect(isCreateChildren(difference)).to.be.eq(false);
-    expect(isRemoveChildren(difference)).to.be.eq(false);
     expect(isRemoveElement(difference)).to.be.eq(true);
   });
 
@@ -72,31 +68,6 @@ describe('diff', () => {
     expect(isTextChanged(difference)).to.be.eq(true);
     expect(isNewElement(difference)).to.be.eq(false);
     expect(isCreateChildren(difference)).to.be.eq(false);
-    expect(isRemoveChildren(difference)).to.be.eq(false);
-    expect(isRemoveElement(difference)).to.be.eq(false);
-  });
-
-  it('revmove children', () => {
-    const a = <div><span></span></div>;
-    const b = <div></div>;
-    const difference = diff(a, b);
-    expect(isReplaceElement(difference)).to.be.eq(false);
-    expect(isTextChanged(difference)).to.be.eq(false);
-    expect(isNewElement(difference)).to.be.eq(false);
-    expect(isCreateChildren(difference)).to.be.eq(false);
-    expect(isRemoveChildren(difference)).to.be.eq(true);
-    expect(isRemoveElement(difference)).to.be.eq(false);
-  });
-
-  it('revmove children(with replace)', () => {
-    const a = <div><span></span></div>;
-    const b = <span></span>;
-    const difference = diff(a, b);
-    expect(isReplaceElement(difference)).to.be.eq(true);
-    expect(isTextChanged(difference)).to.be.eq(false);
-    expect(isNewElement(difference)).to.be.eq(false);
-    expect(isCreateChildren(difference)).to.be.eq(false);
-    expect(isRemoveChildren(difference)).to.be.eq(true);
     expect(isRemoveElement(difference)).to.be.eq(false);
   });
 
@@ -108,7 +79,6 @@ describe('diff', () => {
     expect(isTextChanged(difference)).to.be.eq(false);
     expect(isNewElement(difference)).to.be.eq(false);
     expect(isCreateChildren(difference)).to.be.eq(true);
-    expect(isRemoveChildren(difference)).to.be.eq(false);
     expect(isRemoveElement(difference)).to.be.eq(false);
   });
 
@@ -120,7 +90,6 @@ describe('diff', () => {
     expect(isTextChanged(difference)).to.be.eq(false);
     expect(isNewElement(difference)).to.be.eq(false);
     expect(isCreateChildren(difference)).to.be.eq(true);
-    expect(isRemoveChildren(difference)).to.be.eq(false);
     expect(isRemoveElement(difference)).to.be.eq(false);
   });
 
@@ -132,7 +101,6 @@ describe('diff', () => {
     expect(isTextChanged(difference)).to.be.eq(false);
     expect(isNewElement(difference)).to.be.eq(false);
     expect(isCreateChildren(difference)).to.be.eq(false);
-    expect(isRemoveChildren(difference)).to.be.eq(false);
     expect(isRemoveElement(difference)).to.be.eq(false);
     expect(difference.attr).to.be.deep.equal([{key: 'href', value: 'https://www.test.com', state: AttrState.REPLACED}]);
   });
@@ -145,7 +113,6 @@ describe('diff', () => {
     expect(isTextChanged(difference)).to.be.eq(false);
     expect(isNewElement(difference)).to.be.eq(false);
     expect(isCreateChildren(difference)).to.be.eq(false);
-    expect(isRemoveChildren(difference)).to.be.eq(false);
     expect(isRemoveElement(difference)).to.be.eq(false);
     expect(difference.attr).to.be.deep.equal([{key: 'target', value: '_blank', state: AttrState.REMOVED}]);
   });
@@ -158,7 +125,6 @@ describe('diff', () => {
     expect(isTextChanged(difference)).to.be.eq(false);
     expect(isNewElement(difference)).to.be.eq(false);
     expect(isCreateChildren(difference)).to.be.eq(false);
-    expect(isRemoveChildren(difference)).to.be.eq(false);
     expect(isRemoveElement(difference)).to.be.eq(false);
     expect(difference.attr).to.be.deep.equal([{key: 'target', value: '_blank', state: AttrState.NEW}]);
   });
@@ -171,7 +137,6 @@ describe('diff', () => {
     expect(isTextChanged(difference)).to.be.eq(false);
     expect(isNewElement(difference)).to.be.eq(false);
     expect(isCreateChildren(difference)).to.be.eq(false);
-    expect(isRemoveChildren(difference)).to.be.eq(false);
     expect(isRemoveElement(difference)).to.be.eq(false);
     expect(difference.attr).to.be.deep.equal([{key: 'style', value: {width: 200}, state: AttrState.STYLE_CHANGED}]);
   });
@@ -184,7 +149,6 @@ describe('diff', () => {
     expect(isTextChanged(difference)).to.be.eq(false);
     expect(isNewElement(difference)).to.be.eq(false);
     expect(isCreateChildren(difference)).to.be.eq(false);
-    expect(isRemoveChildren(difference)).to.be.eq(false);
     expect(isRemoveElement(difference)).to.be.eq(false);
     expect(difference.attr).to.be.deep.equal([{key: 'style', value: {height: 100}, state: AttrState.STYLE_CHANGED}]);
   });
@@ -197,7 +161,6 @@ describe('diff', () => {
     expect(isTextChanged(difference)).to.be.eq(false);
     expect(isNewElement(difference)).to.be.eq(false);
     expect(isCreateChildren(difference)).to.be.eq(false);
-    expect(isRemoveChildren(difference)).to.be.eq(false);
     expect(isRemoveElement(difference)).to.be.eq(false);
     expect(difference.attr).to.be.deep.equal([{key: 'style', value: {width: 200, height: 100}, state: AttrState.STYLE_CHANGED}]);
   });
@@ -210,7 +173,6 @@ describe('diff', () => {
     expect(isTextChanged(difference)).to.be.eq(false);
     expect(isNewElement(difference)).to.be.eq(false);
     expect(isCreateChildren(difference)).to.be.eq(false);
-    expect(isRemoveChildren(difference)).to.be.eq(false);
     expect(isRemoveElement(difference)).to.be.eq(false);
     expect(difference.attr).to.be.deep.equal([{key: 'style', value: {width: 200, height: ''}, state: AttrState.STYLE_CHANGED}]);
   });
@@ -223,7 +185,6 @@ describe('diff', () => {
     expect(isTextChanged(difference)).to.be.eq(false);
     expect(isNewElement(difference)).to.be.eq(false);
     expect(isCreateChildren(difference)).to.be.eq(false);
-    expect(isRemoveChildren(difference)).to.be.eq(false);
     expect(isRemoveElement(difference)).to.be.eq(false);
     expect(difference.attr).to.be.deep.equal([{key: 'style', value: {width: 200, height: '', color: '#FFCC00'}, state: AttrState.STYLE_CHANGED}]);
   });

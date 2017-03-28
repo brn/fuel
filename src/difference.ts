@@ -25,11 +25,10 @@ import {
 
 export const enum DifferenceBits {
   CREATE_CHILDREN      = 0x00000001,
-  REMOVE_CHILDREN      = 0x00000002,
-  NEW_ELEMENT          = 0x00000004,
-  REMOVE_ELEMENT       = 0x00000008,
-  REPLACE_ELEMENT      = 0x00000010,
-  TEXT_CHANGED         = 0x00000020
+  NEW_ELEMENT          = 0x00000002,
+  REMOVE_ELEMENT       = 0x00000004,
+  REPLACE_ELEMENT      = 0x00000008,
+  TEXT_CHANGED         = 0x00000010
 }
 
 
@@ -64,11 +63,6 @@ export interface Difference {
 
 export function isCreateChildren(diff: Difference): boolean {
   return (diff.flags & DifferenceBits.CREATE_CHILDREN) === DifferenceBits.CREATE_CHILDREN;
-}
-
-
-export function isRemoveChildren(diff: Difference): boolean {
-  return (diff.flags & DifferenceBits.REMOVE_CHILDREN) === DifferenceBits.REMOVE_CHILDREN;
 }
 
 
@@ -182,7 +176,7 @@ export function diff(oldElement: FuelElement, newElement: FuelElement): Differen
       result.flags |= DifferenceBits.TEXT_CHANGED;
     }
     return result;
-  } else if (FuelElementView.tagTypeOf(oldElement) !== FuelElementView.tagTypeOf(newElement)) {
+  } else if (oldElement.type !== newElement.type) {
     result.flags |= DifferenceBits.REPLACE_ELEMENT;
   } else {
     const newPropsLength = newProps.length;
@@ -215,9 +209,7 @@ export function diff(oldElement: FuelElement, newElement: FuelElement): Differen
   const isNewElementHasChildren = FuelElementView.hasChildren(newElement);
   const isOldElementHasChildren = FuelElementView.hasChildren(oldElement);
 
-  if (!isNewElementHasChildren && isOldElementHasChildren) {
-    result.flags |= DifferenceBits.REMOVE_CHILDREN;
-  } else if (isNewElementHasChildren && !isOldElementHasChildren) {
+  if (isNewElementHasChildren && !isOldElementHasChildren) {
     result.flags |= DifferenceBits.CREATE_CHILDREN;
   }
 

@@ -62,6 +62,6 @@ Fork!
 
 ```
 yarn install
-yarn run test
+yarn run ut+ct
 yarn run minify
 ```

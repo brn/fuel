@@ -5,19 +5,18 @@
     "experimentalDecorators": true,
     "allowSyntheticDefaultImports": true,
     "moduleResolution": "node",
+    "jsx": "react",
     "module": "commonjs",
     "noImplicitAny": false,
     "baseUrl": "./",
-    "jsx": "react",
     "importHelpers": true,
     "alwaysStrict": true,
     "lib": ["dom", "es5", "es6", "es2016", "es2017"],
     "paths": {
-      "fueldom": ["lib/index.d.ts"]
+      "fueldom": ["node_modules/fueldom/lib/index.d.ts"]
     }
   },
   "exclude": [
-    "examples",
     "node_modules",
     "plugins",
     "less",

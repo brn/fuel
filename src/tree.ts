@@ -55,11 +55,12 @@ export function fastCreateDomTree(
   createStem: () => Stem) {
   let createdDomTreeRoot: FuelDOMNode;
 
-  if (FuelElementView.isComponent(fuelElement)) {
+  while (fuelElement && FuelElementView.isComponent(fuelElement)) {
     [fuelElement, context] = renderComponent(context, fuelElement, createStem);
-    if (!fuelElement) {
-      return null;
-    }
+  }
+
+  if (!fuelElement) {
+    return;
   }
 
   const stack = makeInitialDomTreeStack(context || {}, rootElement, fuelElement);
@@ -106,7 +107,7 @@ export function fastCreateDomTree(
       let {context} = next;
       while (FuelElementView.isComponent(child)) {
         root = child;
-        [child, context] = renderComponent(next.context, child, createStem);
+        [child, context] = renderComponent(context, child, createStem);
         if (!child) {
           continue LOOP;
         }
@@ -120,6 +121,6 @@ export function fastCreateDomTree(
 
 function renderComponent(oldContext: any, fuelElement: FuelElement, createStem: () => Stem) {
   const [nodes, context] = FuelElementView.instantiateComponent(oldContext, fuelElement, null);
-  fuelElement._stem.registerOwner(nodes);
+  fuelElement._stem.registerOwner(fuelElement);
   return [nodes, context];
 }

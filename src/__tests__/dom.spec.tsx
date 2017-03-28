@@ -140,5 +140,17 @@ describe('FuelDOM', () => {
         }, 100);
       });
     });
+
+    it('handle change event on input/textarea', () => {
+      class A extends Fuel.Component<any, any> {
+        state = {text: ''}
+        render() {
+          return <input type="text" onChange={e => this.handleChange(e)} value={this.state.text}/>;
+        }
+        handleChange(e) {
+          this.setState({text: e.target.value});
+        }
+      }
+    });
   });
 })

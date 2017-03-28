@@ -67,57 +67,63 @@ gulp.task('typescript-test', () => {
  * javascriptのminify
  */
 gulp.task('minify', ['typescript'], done => {
-  minify({file: 'lib/index.js', uglify: true, souceMaps: false, builtins: false, onEnd: done});
+  minify({file: 'lib/index.js', uglify: true, souceMaps: false, builtins: false, onEnd: done, filesize: true, isTsify: false});
 });
 
 
 /**
  * javascriptのminify
  */
-function minify({file, uglify = false, sourceMaps = false, onEnd = null, builtins = true}) {
+gulp.task('minify-debug', ['typescript'], done => {
+  minify({file: 'lib/index.js', uglify: false, souceMaps: true, builtins: false, onEnd: done, filesize: false, isTsify: false});
+});
+
+
+/**
+ * javascriptのminify
+ */
+function minify({file, uglify = false, sourceMaps = false, onEnd = null, builtins = true, filesize = false, isTsify = true}) {
   const browserify = require('browserify');
-  const tsify = require('tsify');
-  const source = require('vinyl-source-stream');
-  const buffer = require('vinyl-buffer');
+  const tsify      = require('tsify');
+  const source     = require('vinyl-source-stream');
+  const buffer     = require('vinyl-buffer');
   const sourcemaps = require('gulp-sourcemaps');
-  const guglify = require('gulp-uglify');
-  const Uglify = require('uglify-js');
-  const derequire = require('gulp-derequire');
+  const guglify    = require('gulp-uglify');
+  const Uglify     = require('uglify-js');
+  const derequire  = require('gulp-derequire');
+  const size       = require('gulp-check-filesize');
+  const gif        = require('gulp-if');
+
   let reserved = Uglify.readReservedFile('./reserved.json');
   reserved = Uglify.readDefaultReservedFile(reserved);
 
   const b = browserify(file, {debug: sourceMaps, builtins, standalone: 'Fuel'})
-          .on('error', e => {
-            console.error(e);
-            process.exit(1);
-          })
-          .plugin(tsify)
-          .bundle()
-          .pipe(source(`${path.basename(file).replace(/\.[^.]+$/, '')}.bundle.js`))
-          .pipe(derequire())
-          .pipe(buffer());
-
-  const next = (() => {
-    if (uglify) {
-      return b.pipe(guglify({
-        mangle: true,
-        compress: true,
-        mangleProperties: {
-          reserved: reserved.props,
-          ignore_quoted: true
-        }
-      }));
+    .on('error', e => {
+      console.error(e);
+      process.exit(1);
+    });
+  return (() => {
+    if (isTsify) {
+      return b.plugin(tsify);
     }
     return b;
-  })();
-
-  return (() => {
-    if (sourceMaps) {
-      return next.pipe(sourcemaps.init({loadMaps: true}))
-        .pipe(sourcemaps.write());
-    }
-    return next;
-  })().pipe(gulp.dest(`./${DIST}`))
+  })()
+    .bundle()
+    .pipe(source(`${path.basename(file).replace(/\.[^.]+$/, '')}.bundle.js`))
+    .pipe(derequire())
+    .pipe(buffer())
+    .pipe(gif(uglify, guglify({
+      mangle: true,
+      compress: true,
+      mangleProperties: {
+        reserved: reserved.props,
+        ignore_quoted: true
+      }
+    })))
+    .pipe(gif(sourceMaps, sourcemaps.init({loadMaps: true})))
+    .pipe(gif(sourceMaps, sourcemaps.write()))
+    .pipe(gif(filesize, size({enableGzip: true})))
+    .pipe(gulp.dest(`./${DIST}`))
     .on('end', () => onEnd && onEnd());
 }
 

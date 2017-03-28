@@ -17,11 +17,10 @@
 import { FuelElement } from './type';
 export declare const enum DifferenceBits {
     CREATE_CHILDREN = 1,
-    REMOVE_CHILDREN = 2,
-    NEW_ELEMENT = 4,
-    REMOVE_ELEMENT = 8,
-    REPLACE_ELEMENT = 16,
-    TEXT_CHANGED = 32,
+    NEW_ELEMENT = 2,
+    REMOVE_ELEMENT = 4,
+    REPLACE_ELEMENT = 8,
+    TEXT_CHANGED = 16,
 }
 export declare const enum AttrState {
     NEW = 1,
@@ -47,7 +46,6 @@ export interface Difference {
     flags: number;
 }
 export declare function isCreateChildren(diff: Difference): boolean;
-export declare function isRemoveChildren(diff: Difference): boolean;
 export declare function isNewElement(diff: Difference): boolean;
 export declare function isRemoveElement(diff: Difference): boolean;
 export declare function isReplaceElement(diff: Difference): boolean;

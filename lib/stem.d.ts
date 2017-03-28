@@ -18,16 +18,18 @@ import { FuelElement, SharedEventHandler, Stem } from './type';
 import { Renderer } from './renderer/renderer';
 export declare class FuelStem implements Stem {
     static renderer: Renderer;
+    private _enabled;
     private tree;
     private batchs;
     private batchCallback;
     private sharedEventHandler;
+    enterUnsafeUpdateZone(cb: () => void): void;
     registerOwner(owner: FuelElement): void;
     owner(): FuelElement;
     setEventHandler(handler: SharedEventHandler): void;
     getEventHandler(): SharedEventHandler;
     private renderAtAnimationFrame();
-    render(el: FuelElement, callback?: (el: Node) => void): void;
+    render(el: FuelElement, callback?: (el: Node) => void, updateOwnwer?: boolean): void;
     private attach(el);
     private patch(root);
 }

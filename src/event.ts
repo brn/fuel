@@ -35,6 +35,10 @@ export class SharedEventHandlerImpl implements SharedEventHandler {
       root['__events'] = {};
     }
 
+    if ((el as Node).nodeName === 'INPUT' && type === 'change') {
+      type = 'keyup';
+    }
+
     const id = String(this.id++);
 
     if (!root['__events'][type]) {
@@ -49,7 +53,7 @@ export class SharedEventHandlerImpl implements SharedEventHandler {
         }
       };
       this.events[type] = {count: 1, '0': handler} as any;
-      el.addEventListener(type, handler, false);
+      root.addEventListener(type, handler, false);
     } else {
       this.events[type][String(this.events[type].count++)] = callback;
     }
@@ -62,15 +66,40 @@ export class SharedEventHandlerImpl implements SharedEventHandler {
     }
   }
 
-  public removeEvent(root: EventTarget, el: EventTarget) {
+  public removeEvent(root: EventTarget, el: EventTarget, type: string) {
+    if (el['__fuelevent']) {
+      const eventInfo = el['__fuelevent'];
+      if (eventInfo[type]) {
+        this.events[type][eventInfo[type]] = null;
+        this.events[type].count--;
+        eventInfo[type] = null;
+        if (this.events[type].count === 0) {
+          root.removeEventListener(type, this.events[type]['0']);
+          root['__events'][type] = false;
+        }
+      }
+    }
+  }
+
+  public replaceEvent(root: EventTarget, el: EventTarget, type: string, value: (e: Event) => void) {
+    if (el['__fuelevent']) {
+      const eventInfo = el['__fuelevent'];
+      if (eventInfo[type]) {
+        this.events[type][eventInfo[type]] = value;
+      }
+    }
+  }
+
+  public removeEvents(root: EventTarget, el: EventTarget) {
     if (el['__fuelevent']) {
       const eventInfo = el['__fuelevent'];
       for (const type in eventInfo) {
+        if (eventInfo[type] === null) {continue}
         this.events[type][eventInfo[type]] = null;
         this.events[type].count--;
+        eventInfo[type] = null;
         if (this.events[type].count === 0) {
           root.removeEventListener(type, this.events[type]['0']);
-          this.events[type] = null;
         }
       }
     }

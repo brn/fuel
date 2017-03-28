@@ -32,14 +32,17 @@ export interface Property {
 
 export interface SharedEventHandler {
   addEvent(root: EventTarget, el: EventTarget, type: string, callback: (e: Event) => void): void;
-  removeEvent(root: EventTarget, el: EventTarget): void;
+  removeEvent(root: EventTarget, el: EventTarget, type: string): void;
+  replaceEvent(root: EventTarget, el: EventTarget, type: string, callback: (e: Event) => void): void;
+  removeEvents(root: EventTarget, el: EventTarget): void;
 }
 
 
 export interface Stem {
+  enterUnsafeUpdateZone(cb: () => void): void;
   setEventHandler(eventHandler: SharedEventHandler): void;
   getEventHandler(): SharedEventHandler;
-  render(el: FuelElement, callback?: (el: Node) => void): void;
+  render(el: FuelElement, callback?: (el: Node) => void, updateOwner?: boolean): void;
   registerOwner(el: FuelElement): void;
   owner(): FuelElement;
 }
@@ -93,7 +96,7 @@ export interface ESObservable<T> {
 
 
 export interface FuelElement {
-  type: FuelComponentType;
+  type: any;
   props: Property[],
   key: string|number;
   children: FuelElement[];
@@ -103,6 +106,27 @@ export interface FuelElement {
   _componentRenderedElementTreeCache?: FuelElement;
   _keymap?: {[key: string]: FuelElement};
   _subscriptions?: ESSubscription[];
+  _parent: FuelElement|null;
+}
+
+
+export interface BuiltinFuelElement extends FuelElement {
+  type: string;
+}
+
+
+export interface StatelessFuelElement extends FuelElement {
+  type: StatelessComponent<any>;
+}
+
+
+export interface ComponentFuelElement extends FuelElement {
+  type: FuelComponentStatic<any, any>;
+}
+
+
+export interface FactoryFuelElement extends FuelElement {
+  type: FuelComponent<any, any>|StatelessComponent<any>;
 }
 
 

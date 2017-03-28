@@ -1,6 +1,6 @@
 {
   "name": "fueldom",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "",
   "main": "dist/index.bundle.js",
   "scripts": {
@@ -21,7 +21,9 @@
     "del": "^2.2.2",
     "fs-extra": "^2.1.2",
     "gulp-browserify": "^0.5.1",
+    "gulp-check-filesize": "^2.0.1",
     "gulp-derequire": "^2.1.0",
+    "gulp-if": "^2.0.2",
     "gulp-sourcemap": "^1.0.1",
     "gulp-sourcemaps": "^2.4.1",
     "gulp-typescript": "^3.1.5",
