@@ -43,7 +43,7 @@ import {
   FuelDOM
 } from 'fueldom';
 
-class Component extends Fuel.FuelComponent {
+class Component extends Fuel.Component {
   render() {
     return (
       <div>
