@@ -69,6 +69,10 @@ FuelDOM.render(<Component/>, document.getElementById('app'));
 * Improve vdom patch method to make it more fast.
 * Original functionarity or api.
 
+## Eco Systems
+
+Now router is available [fuel-router](https://github.com/brn/fuel-router).
+
 ## Contribute
 
 Fork!
