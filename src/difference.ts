@@ -17,7 +17,8 @@
 
 import {
   FuelElement,
-  Property
+  Property,
+  KeyMap
 } from './type';
 import {
   FuelElementView
@@ -38,6 +39,12 @@ export const enum AttrState {
   REPLACED,
   UNCHANGED,
   STYLE_CHANGED
+}
+
+
+export interface PropsDiff {
+  value: any;
+  state: AttrState;
 }
 
 
@@ -81,12 +88,12 @@ export function isReplaceElement(diff: Difference): boolean {
 }
 
 
-export function isTextChanged(diff: Difference) {
+export function isTextChanged(diff: Difference): boolean {
   return (diff.flags & DifferenceBits.TEXT_CHANGED) === DifferenceBits.TEXT_CHANGED;
 }
 
 
-function compare(valueA: any, valueB: any) {
+function compare(valueA: any, valueB: any): boolean {
   if (valueA === null) {
     if (valueB || valueB === undefined) {return false;}
     return true;
@@ -114,8 +121,8 @@ function compare(valueA: any, valueB: any) {
 }
 
 
-function compareStyle(prev: {[key: string]: any}, next: {[key: string]: any}) {
-  const diff = {};
+function compareStyle(prev: KeyMap<any>, next: KeyMap<any>): [KeyMap<string>, number] {
+  const diff: KeyMap<string> = {} as any;
   const unchanged = {};
   let count = 0;
 
@@ -140,10 +147,10 @@ function compareStyle(prev: {[key: string]: any}, next: {[key: string]: any}) {
 }
 
 
-function checkProps(bufferSet, prop: Property, old) {
+function checkProps(bufferSet: KeyMap<PropsDiff>, prop: Property, isOldProps: boolean) {
   const {name, value} = prop;
   if (!bufferSet[name]) {
-    bufferSet[name] = {state: old? AttrState.REMOVED: AttrState.NEW, value};
+    bufferSet[name] = {state: isOldProps? AttrState.REMOVED: AttrState.NEW, value};
   } else if (name === 'style') {
     const [diff, count] = compareStyle(bufferSet[name].value, value);
     if (count) {

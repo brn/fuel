@@ -30,8 +30,7 @@ export declare class FuelStem implements Stem {
     setEventHandler(handler: SharedEventHandler): void;
     getEventHandler(): SharedEventHandler;
     private renderAtAnimationFrame();
-    render(el: FuelElement, callback?: (el: Node) => void, updateOwnwer?: boolean): void;
+    render(el: FuelElement, callback?: (el: Node) => void, context?: any, updateOwnwer?: boolean): void;
     private attach(el, updateOwner);
-    private patchComponent(context, newElement, oldElement);
-    private patch(root);
+    private patch(newTree, context);
 }

@@ -16,34 +16,10 @@
  */
 
 
-import {
-  BufferType,
-  HAS_TYPED_ARRAY,
-  BUFFER_SIZE_MULTIPLER,
-  ExportProperites
-} from './type';
-
 declare var global: any;
 const g = typeof global === 'object'? global: typeof window === 'object'? window: this || {};
 
-export const makeBuffer: (number) => BufferType = HAS_TYPED_ARRAY? size => {
-  return new Uint16Array(new ArrayBuffer(size * BUFFER_SIZE_MULTIPLER));
-}: size => {
-  return new Array(size);
-};
-
-
-export function setBuffer(buffer: BufferType, value: BufferType, offset: number = 0) {
-  if (buffer instanceof Uint16Array) {
-    buffer.set(value, offset);
-    return buffer;
-  }
-  buffer.splice.apply(buffer, [offset, value.length, ...value as number[]]);
-  return buffer;
-}
-
-
-export const Symbol = typeof g[ExportProperites.Symbol] === 'function'? g[ExportProperites.Symbol]: (() => {
+export const Symbol = typeof g.Symbol === 'function'? g.Symbol: (() => {
   const map = {};
   function Symbol(sym: string) {
     return `@@${sym}`;

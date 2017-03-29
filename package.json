@@ -1,6 +1,6 @@
 {
   "name": "fueldom",
-  "version": "0.0.6",
+  "version": "0.1.0",
   "description": "",
   "main": "dist/index.bundle.js",
   "scripts": {
@@ -17,6 +17,7 @@
     "async": "^2.1.5",
     "benchmark": "^2.1.3",
     "browserify": "^14.1.0",
+    "bundle-collapser": "^1.2.1",
     "chai": "^3.5.0",
     "del": "^2.2.2",
     "fs-extra": "^2.1.2",

@@ -19,7 +19,7 @@ export declare class SharedEventHandlerImpl implements SharedEventHandler {
     private events;
     private id;
     addEvent(root: EventTarget, el: EventTarget, type: string, callback: (e: Event) => void): void;
-    removeEvent(root: EventTarget, el: EventTarget, type: string): void;
-    replaceEvent(root: EventTarget, el: EventTarget, type: string, value: (e: Event) => void): void;
-    removeEvents(root: EventTarget, el: EventTarget): void;
+    removeEvent(el: EventTarget, type: string): void;
+    replaceEvent(el: EventTarget, type: string, value: (e: Event) => void): void;
+    removeEvents(el: EventTarget): void;
 }

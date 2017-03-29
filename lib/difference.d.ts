@@ -29,6 +29,10 @@ export declare const enum AttrState {
     UNCHANGED = 4,
     STYLE_CHANGED = 5,
 }
+export interface PropsDiff {
+    value: any;
+    state: AttrState;
+}
 export interface AttrDiff {
     key: string;
     value: string;

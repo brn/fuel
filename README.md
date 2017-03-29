@@ -1,8 +1,10 @@
 # What's this?
 
+**NOW THIS PRODUCT IS BETA**
+
 The FuelDOM is React compatible virtual-dom implementation.
 
-* File size is samller than Reactjs **8kb(raw 16kb)**
+* File size is samller than Reactjs **8.79 KB gzipped(raw 24.92 KB)**
 * Change vdom patch function as using requestAnimationFrame and requestIdleCallback.
 * Compatible with jsx.
 
@@ -14,10 +16,21 @@ npm install fueldom --save
 
 ## Now compatible with
 
+* JSX
 * React Component feature like `setState`.
 * React Component hooks like `componentWillMount`
+* Element Props.
 * DOM Event handler.
 * DOM Style props.
+* Component Context
+* Style
+* Element ref
+
+## Omitted
+
+* React.PropTypes.xxx runtime type checks(React.PropTypes is exists, but ignored).
+* Style Property name check.
+* Some error checks(maybe implemented in future).
 
 ## Usage
 

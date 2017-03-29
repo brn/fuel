@@ -16,3 +16,4 @@
  */
 export { Fuel, React } from './fuel';
 export * from './dom';
+export { FuelComponent, PublicFuelElement as FuelElement, FuelComponentStatic } from './type';

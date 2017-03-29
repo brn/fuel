@@ -45,7 +45,7 @@ describe('FuelDOM', () => {
     });
 
     it('set style 2.', done => {
-      FuelDOM.render(<div style={{display: 'flex', flexGrow: '3', flexShrink: '2', flexDirection: 'column', flexWrap: 'nowrap'}}></div>, dom, (tree: HTMLElement) => {
+      FuelDOM.render(<div style={{display: 'flex', flexGrow: 3, flexShrink: 2, flexDirection: 'column', flexWrap: 'nowrap'}}></div>, dom, (tree: HTMLElement) => {
         const {style} = tree;
         expect(style.display).to.be.eq('flex');
         expect(style.flexGrow).to.be.eq('3');
@@ -60,11 +60,14 @@ describe('FuelDOM', () => {
       class Component extends Fuel.Component<any, any> {
         public state = {width: 100, height: 100};
         render() {
-          return <div onClick={e => this.handleClick(e)} style={this.state}></div>
+          return <div ref="div" onClick={e => this.handleClick(e)} style={this.state}></div>
         }
         handleClick(e: Event) {
           this.setState({width: 200, height: 200, color: '#FFF'}, () => {
-            console.log(dom);
+            const style = this.refs['div']['style'];
+            expect(style.width).to.be.eq('200px');
+            expect(style.height).to.be.eq('200px');
+            expect(style.color).to.be.eq('rgb(255, 255, 255)');
             done();
           });
         }

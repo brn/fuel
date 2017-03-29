@@ -16,30 +16,27 @@
  */
 import { FuelElement, BuiltinFuelElement, StatelessFuelElement, ComponentFuelElement, FactoryFuelElement, Property, FuelComponentType, Stem } from './type';
 import { Renderer } from './renderer/renderer';
-export declare class FuelElementView {
-    static allocateTextTagName(): number;
-    static allocateTagName(tagName: string): number;
-    static isComponent(fuelElement: FuelElement): fuelElement is FactoryFuelElement;
-    static isStatelessComponent(fuelElement: FuelElement): fuelElement is StatelessFuelElement;
-    static isComponentClass(fuelElement: FuelElement): fuelElement is ComponentFuelElement;
-    static tagNameOf(fuelElement: FuelElement): string;
-    static hasChildren(el: FuelElement): boolean;
-    static isFuelElement(fuelElement: any): fuelElement is FuelElement;
-    static isTextNode(fuelElement: FuelElement): fuelElement is BuiltinFuelElement;
-    static getTextValueOf(fuelElement: FuelElement): string;
-    static getComponentRenderedTree(fuelElement: FuelElement): FuelElement;
-    static getProps({props, children}: FuelElement, isInsertChildren?: boolean): Object;
-    static invokeDidMount(el: FuelElement): void;
-    static invokeWillMount(el: FuelElement): void;
-    static invokeWillUpdate(el: FuelElement): void;
-    static invokeDidUpdate(el: FuelElement): void;
-    static invokeWillUnmount(el: FuelElement): void;
-    static stripComponent(fuelElement: FuelElement): FuelElement;
-    static instantiateComponent(context: any, fuelElement: FactoryFuelElement, oldElement?: FuelElement): [FuelElement, any];
-    static removeEvent(rootElement: FuelElement, fuelElement: FuelElement, type: any): void;
-    static replaceEvent(rootElement: FuelElement, fuelElement: FuelElement, type: any, fn: (e: Event) => void): void;
-    static addEvent(rootElement: FuelElement, fuelElement: FuelElement, type: any, eventHandler: any): void;
-    static createDomElement(rootElement: FuelElement, fuelElement: FuelElement, renderer: Renderer, createStem: () => Stem): any;
-}
+export declare const INSTANCE_ELEMENT_SYM: any;
+export declare const FuelElementView: {
+    allocateTextTagName(): number;
+    allocateTagName(tagName: string): number;
+    isComponent(fuelElement: FuelElement): fuelElement is FactoryFuelElement;
+    isStatelessComponent(fuelElement: FuelElement): fuelElement is StatelessFuelElement;
+    isComponentClass(fuelElement: FuelElement): fuelElement is ComponentFuelElement;
+    tagNameOf(fuelElement: FuelElement): string;
+    hasChildren(el: FuelElement): boolean;
+    isFuelElement(fuelElement: any): fuelElement is FuelElement;
+    isTextNode(fuelElement: FuelElement): fuelElement is BuiltinFuelElement;
+    getTextValueOf(fuelElement: FuelElement): string;
+    getComponentRenderedTree(fuelElement: FuelElement): FuelElement;
+    getProps({props, children}: FuelElement, isInsertChildren?: boolean): Object;
+    invokeDidMount(el: FuelElement): void;
+    invokeDidUpdate(el: FuelElement): void;
+    invokeWillUnmount(el: FuelElement): void;
+    stripComponent(fuelElement: FuelElement): FuelElement;
+    instantiateComponent(context: any, fuelElement: FactoryFuelElement, oldElement?: FuelElement): [FuelElement, any];
+    addEvent(rootElement: FuelElement, fuelElement: FuelElement, type: any, eventHandler: any): void;
+    createDomElement(rootElement: FuelElement, fuelElement: FuelElement, renderer: Renderer, createStem: () => Stem): any;
+};
 export declare function cloneElement(fuelElement: FuelElement, props?: any, children?: FuelElement[]): FuelElement;
 export declare function makeFuelElement(type: FuelComponentType, key: string | number, props: Property[], children?: FuelElement[]): FuelElement;

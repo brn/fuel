@@ -19,20 +19,25 @@
 import {
   SharedEventHandler
 } from './type';
+import {
+  Symbol
+} from './util';
 
 
+const FUEL_EVENT_SYM = Symbol('__fuelevent');
+const ROOT_EVENT_SYM = Symbol('__root_events');
 const ON_REGEXP = /^on/;
 
 
 export class SharedEventHandlerImpl implements SharedEventHandler {
-  private events: {[key: string]: {[key: string]: (e: Event) => void} & {count: number}} = {};
+  private events: {[key: string]: {[key: string]: (e: Event) => void} & {count: number, root: Node}} = {};
 
   private id: number = 1;
 
   public addEvent(root: EventTarget, el: EventTarget, type: string, callback: (e: Event) => void) {
     type = type.replace(ON_REGEXP, '').toLowerCase();
-    if (!root['__events']) {
-      root['__events'] = {};
+    if (!root[ROOT_EVENT_SYM]) {
+      root[ROOT_EVENT_SYM] = {};
     }
 
     if ((el as Node).nodeName === 'INPUT' && type === 'change') {
@@ -41,10 +46,10 @@ export class SharedEventHandlerImpl implements SharedEventHandler {
 
     const id = String(this.id++);
 
-    if (!root['__events'][type]) {
-      root['__events'][type] = true;
+    if (!root[ROOT_EVENT_SYM][type]) {
+      root[ROOT_EVENT_SYM][type] = true;
       const handler = (e: Event) => {
-        const eventInfo = e.target['__fuelevent'];
+        const eventInfo = e.target[FUEL_EVENT_SYM];
         if (eventInfo && eventInfo[e.type] && eventInfo[e.type] === id) {
           const callback = this.events[e.type][id];
           if (callback) {
@@ -52,55 +57,51 @@ export class SharedEventHandlerImpl implements SharedEventHandler {
           }
         }
       };
-      this.events[type] = {count: 1, '0': handler} as any;
+      this.events[type] = {count: 1, '0': handler, root} as any;
       root.addEventListener(type, handler, false);
     } else {
       this.events[type][String(this.events[type].count++)] = callback;
     }
 
     this.events[type][id] = callback;
-    if (!el['__fuelevent']) {
-      el['__fuelevent'] = {[type]: id};
+    if (!el[FUEL_EVENT_SYM]) {
+      el[FUEL_EVENT_SYM] = {[type]: id};
     } else {
-      el['__fuelevent'][type] = id;
+      el[FUEL_EVENT_SYM][type] = id;
     }
   }
 
-  public removeEvent(root: EventTarget, el: EventTarget, type: string) {
-    if (el['__fuelevent']) {
-      const eventInfo = el['__fuelevent'];
+  public removeEvent(el: EventTarget, type: string) {
+    if (el[FUEL_EVENT_SYM]) {
+      const eventInfo = el[FUEL_EVENT_SYM];
       if (eventInfo[type]) {
         this.events[type][eventInfo[type]] = null;
         this.events[type].count--;
         eventInfo[type] = null;
+        const root = this.events[type].root;
         if (this.events[type].count === 0) {
           root.removeEventListener(type, this.events[type]['0']);
-          root['__events'][type] = false;
+          root[ROOT_EVENT_SYM][type] = false;
+          this.events[type].root = null;
         }
       }
     }
   }
 
-  public replaceEvent(root: EventTarget, el: EventTarget, type: string, value: (e: Event) => void) {
-    if (el['__fuelevent']) {
-      const eventInfo = el['__fuelevent'];
+  public replaceEvent(el: EventTarget, type: string, value: (e: Event) => void) {
+    if (el[FUEL_EVENT_SYM]) {
+      const eventInfo = el[FUEL_EVENT_SYM];
       if (eventInfo[type]) {
         this.events[type][eventInfo[type]] = value;
       }
     }
   }
 
-  public removeEvents(root: EventTarget, el: EventTarget) {
-    if (el['__fuelevent']) {
-      const eventInfo = el['__fuelevent'];
+  public removeEvents(el: EventTarget) {
+    if (el[FUEL_EVENT_SYM]) {
+      const eventInfo = el[FUEL_EVENT_SYM];
       for (const type in eventInfo) {
-        if (eventInfo[type] === null) {continue}
-        this.events[type][eventInfo[type]] = null;
-        this.events[type].count--;
-        eventInfo[type] = null;
-        if (this.events[type].count === 0) {
-          root.removeEventListener(type, this.events[type]['0']);
-        }
+        this.removeEvent(el, type);
       }
     }
   }

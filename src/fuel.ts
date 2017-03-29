@@ -25,8 +25,8 @@ import {
   StatelessComponent,
   FuelComponentStatic,
   FuelNode,
-  ExportProperites,
-  ReactCompatiblePropsTypes
+  ReactCompatiblePropsTypes,
+  HTMLAttributes
 } from './type';
 import {
   FuelStem
@@ -34,7 +34,8 @@ import {
 import {
   FuelElementView,
   makeFuelElement,
-  cloneElement
+  cloneElement,
+  INSTANCE_ELEMENT_SYM
 } from './element';
 import {
   Renderer
@@ -43,13 +44,9 @@ import {
   DomRenderer
 } from './renderer/dom-renderer';
 import {
-  makeBuffer,
-  setBuffer,
-  invariant
+  invariant,
+  merge
 } from './util';
-import {
-  HTMLAttributes
-} from './dom-attr';
 
 
 /**
@@ -97,6 +94,8 @@ const VALID_TYPES = {'string': 1, 'function': 1};
 
 
 export class ComponentImpl<Props, State> implements FuelComponent<Props, State> {
+  public state: State;
+
   constructor(private _props: Props = {} as any, private _context = {}) {
   }
 
@@ -127,7 +126,18 @@ export class ComponentImpl<Props, State> implements FuelComponent<Props, State> 
   /**
    * Will be rewrited after.
    */
-  public ['setState'](state: State, cb?: () => void) {}
+  public ['setState'](state: State, cb?: () => void) {
+    this.state = merge(this.state, state);
+    this.componentWillUpdate();
+    const newContext = merge(this.context || {}, this.getChildContext());
+    const tree = this.render();
+    const fuelElement: FuelElement = this[INSTANCE_ELEMENT_SYM];
+    tree._componentInstance = this;
+    fuelElement._stem.render(tree, () => {
+      fuelElement._componentRenderedElementTreeCache = tree;
+      cb && cb();
+    }, newContext, false);
+  }
 }
 
 export class PureComponentImpl<Props, State> extends ComponentImpl<Props, State> {

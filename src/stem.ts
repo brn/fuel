@@ -23,7 +23,6 @@ import {
   Stem,
   FuelComponent,
   FuelComponentStatic,
-  ExportProperites,
   CONVERSATION_TABLE,
   DOMEvents
 } from './type';
@@ -66,7 +65,8 @@ type PatchStackType = {
   oldChildren: FuelElement[],
   parsed: boolean,
   difference: Difference,
-  root: FuelElement
+  root: FuelElement;
+  isKeyedItem: boolean;
 };
 
 
@@ -116,7 +116,7 @@ function updateElement(diff: Difference, rootElement: FuelElement, newElement: F
     case AttrState.REPLACED:
       if (DOMEvents[key]) {
         const lowerKey = key.slice(2).toLowerCase();
-        FuelElementView.replaceEvent(strippedRoot, newElement, lowerKey, value as any);
+        strippedRoot._stem.getEventHandler().replaceEvent(newElement.dom, lowerKey, value as any);
       } else {
         domElement[key] = value;
       }
@@ -128,7 +128,12 @@ function updateElement(diff: Difference, rootElement: FuelElement, newElement: F
       }
       break;
     case AttrState.REMOVED:
-      domElement.removeAttribute(key);
+      if (DOMEvents[key]) {
+        const lowerKey = key.slice(2).toLowerCase();
+        strippedRoot._stem.getEventHandler().removeEvent(newElement.dom, lowerKey);
+      } else {
+        domElement.removeAttribute(key);
+      }
     default:
     }
   }
@@ -157,7 +162,7 @@ function doClean(rootElement: FuelElement, fuelElement: FuelElement) {
       element: fuelElement,
       children: fuelElement.children.slice(),
       dom: fuelElement.dom,
-      root: rootElement
+      stem: rootElement._stem
     }
   ];
 
@@ -165,7 +170,7 @@ function doClean(rootElement: FuelElement, fuelElement: FuelElement) {
     const next = stack.pop();
     if (next.dom) {
       if (next.dom['__fuelevent']) {
-        next.root._stem.getEventHandler().removeEvents(next.root.dom, next.dom);
+        next.stem.getEventHandler().removeEvents(next.dom);
       }
       if (next.element._subscriptions) {
         next.element._subscriptions.forEach(s => s.unsubscribe());
@@ -174,8 +179,11 @@ function doClean(rootElement: FuelElement, fuelElement: FuelElement) {
     }
     if (next.children.length) {
       const child = next.children.shift();
+      const revealed = FuelElementView.stripComponent(child);
       stack.push(next);
-      stack.push({element: child, children: child.children.slice(), dom: null, root: child._stem? child: next.root});
+      if (revealed) {
+        stack.push({element: child, children: child.children.slice(), dom: revealed.dom, stem: child._stem? child._stem: next.stem});
+      }
     }
   }
 }
@@ -185,13 +193,11 @@ function update({parent, newElement, oldElement, isKeyedItem, difference, root, 
   const {renderer} = FuelStem;
   if (isNewElement(difference)) {
     if (parent) {
-      FuelElementView.invokeWillMount(newElement);
       parent.dom.appendChild(fastCreateDomTree(context, root, newElement, renderer, createStem))
       FuelElementView.invokeDidMount(newElement);
     } else {
       const tree = fastCreateDomTree(context, root, newElement, renderer, createStem);
       if (oldElement) {
-        FuelElementView.invokeWillMount(newElement);
         parent.dom.appendChild(tree);
         FuelElementView.invokeDidMount(newElement);
         FuelElementView.invokeWillUnmount(oldElement);
@@ -204,17 +210,14 @@ function update({parent, newElement, oldElement, isKeyedItem, difference, root, 
     oldElement._stem = null;
     clean(root, oldElement);
   } else if (isReplaceElement(difference)) {
-    FuelElementView.invokeWillMount(newElement);
     FuelElementView.invokeWillUnmount(oldElement);
     replaceElement(root, parent, oldElement, newElement, isKeyedItem, renderer);
     FuelElementView.invokeDidMount(newElement);
   } else if (isTextChanged(difference)) {
-    FuelElementView.invokeWillUpdate(newElement);
     newElement.dom = oldElement.dom;
     newElement.dom.textContent = FuelElementView.getTextValueOf(newElement);
     FuelElementView.invokeDidUpdate(newElement);
   } else {
-    FuelElementView.invokeWillUpdate(newElement);
     copyElementRef(root, oldElement, newElement, isKeyedItem);
     updateElement(difference, root, newElement);
     FuelElementView.invokeDidUpdate(newElement);
@@ -223,6 +226,92 @@ function update({parent, newElement, oldElement, isKeyedItem, difference, root, 
   if (isCreateChildren(difference)) {
     fastCreateDomTree(context, root, newElement, renderer, createStem);
   }
+}
+
+
+function makeInitialStackState(context, newElement: FuelElement, oldElement: FuelElement): PatchStackType[] {
+  return [
+    {
+      newElement,
+      oldElement,
+      newChildren: null,
+      oldChildren: null,
+      parsed: false,
+      difference: null,
+      context,
+      root: newElement,
+      isKeyedItem: false
+    }
+  ];  
+}
+
+
+function createNextStackState(context:any, prev: PatchStackType, oldElement: FuelElement): PatchStackType {
+  let newChild = prev.newChildren.shift();
+  let oldChild: FuelElement;
+  let isKeyedItem = false;
+
+  if (oldElement && oldElement._keymap && newChild && oldElement._keymap[newChild.key]) {
+    oldChild = oldElement._keymap[newChild.key];
+    if (!newChild._keymap) {
+      newChild._keymap = {};
+    }
+    newChild._keymap[newChild.key] = newChild;
+    const index = prev.oldChildren.indexOf(oldChild);
+    prev.oldChildren.splice(index, 1);
+    isKeyedItem = true;
+  } else {
+    oldChild = prev.oldChildren.shift();
+    isKeyedItem = false;
+  }
+
+  let root = prev.root;
+  if (newChild && newChild._stem) {
+    root = newChild;
+  }
+
+  return {
+    newElement: newChild,
+    oldElement: oldChild,
+    newChildren: null,
+    oldChildren: null,
+    parsed: false,
+    difference: null,
+    root,
+    context,
+    isKeyedItem
+  };
+}
+
+
+function patchComponent(context: any, newElement: FuelElement, oldElement: FuelElement) {
+  if (newElement && FuelElementView.isComponent(newElement)) {
+    if (oldElement && oldElement.type !== newElement.type) {
+      while (newElement && FuelElementView.isComponent(newElement)) {
+        [newElement, context] = FuelElementView.instantiateComponent(context, newElement);
+      }
+    } else {
+      while (newElement && FuelElementView.isComponent(newElement)) {
+        if (newElement && oldElement && newElement.type === oldElement.type) {
+          newElement._componentInstance = oldElement._componentInstance;
+        }
+        let revealedOldElement = oldElement;
+        if (oldElement && FuelElementView.isComponent(oldElement)) {
+          revealedOldElement = FuelElementView.getComponentRenderedTree(oldElement);
+        }
+        const [stripedNewTree, newContext] = FuelElementView.instantiateComponent(context, newElement, oldElement);
+        context = newContext;
+        oldElement = revealedOldElement;
+        newElement = stripedNewTree;
+      }
+    }
+  }
+
+  if (oldElement && FuelElementView.isComponent(oldElement)) {
+    oldElement = FuelElementView.stripComponent(oldElement);
+  }
+
+  return [context, newElement, oldElement];
 }
 
 
@@ -278,7 +367,7 @@ export class FuelStem implements Stem {
   }
 
 
-  public render(el: FuelElement, callback: (el: Node) => void = (el => {}), updateOwnwer = true) {
+  public render(el: FuelElement, callback: (el: Node) => void = (el => {}), context: any = {}, updateOwnwer = true) {
     if (!this._enabled) {
       callback(this.tree.dom as any);
       return;
@@ -286,7 +375,7 @@ export class FuelStem implements Stem {
 
     FuelStem.renderer.updateId();
     if (this.tree) {
-      this.patch(el);
+      this.patch(el, context);
       this.batchCallback = () => {
         if (updateOwnwer) {
           this.tree = el;
@@ -309,66 +398,24 @@ export class FuelStem implements Stem {
   }
 
 
-  private patchComponent(context: any, newElement: FuelElement, oldElement: FuelElement) {
-    if (newElement && FuelElementView.isComponent(newElement)) {
-      if (oldElement && oldElement.type !== newElement.type) {
-        while (newElement && FuelElementView.isComponent(newElement)) {
-          [newElement, context] = FuelElementView.instantiateComponent(context, newElement);
-        }
-      } else {
-        while (newElement && FuelElementView.isComponent(newElement)) {
-          if (newElement && oldElement && newElement.type === oldElement.type) {
-            newElement._componentInstance = oldElement._componentInstance;
-          }
-          const [stripedNewTree, newContext] = FuelElementView.instantiateComponent(context, newElement, oldElement);
-          context = newContext;
-          if (oldElement && FuelElementView.isComponent(oldElement)) {
-            oldElement = oldElement._componentRenderedElementTreeCache;
-          }
-          newElement = stripedNewTree;
-        }
-      }
-    }
-
-    if (oldElement && FuelElementView.isComponent(oldElement)) {
-      oldElement = FuelElementView.stripComponent(oldElement);
-    }
-
-    return [context, newElement, oldElement];
-  }
-
-
-  private patch(root: FuelElement) {
+  private patch(newTree: FuelElement, context) {
     if (this.batchs.length) {
       this.batchs.length = 0;
     }
 
-    const stack: PatchStackType[] = [
-      {
-        newElement: root,
-        oldElement: this.tree,
-        newChildren: null,
-        oldChildren: null,
-        parsed: false,
-        difference: null,
-        context: {},
-        root
-      }
-    ];
+    const stack = makeInitialStackState(context, newTree, this.tree);
 
     let parent: PatchStackType = null;
-    let isKeyedItem = false;
-    let context = stack[0].context;
 
     while (stack.length) {
       const next = stack.pop();
-      let {newElement, oldElement} = next;
+      let {newElement, oldElement, context, isKeyedItem} = next;
       let difference: Difference;
       let currentRoot = next.root;
 
       if (!next.parsed) {
 
-        [context, newElement, oldElement] = this.patchComponent(context, newElement, oldElement);
+        [context, newElement, oldElement] = patchComponent(context, newElement, oldElement);
 
         if (!newElement && !oldElement) {
           continue;
@@ -409,38 +456,7 @@ export class FuelStem implements Stem {
            next.difference.flags === DifferenceBits.REPLACE_ELEMENT)) {
         parent = next;
         stack.push(next);
-
-        let newChild = next.newChildren.shift();
-        let oldChild: FuelElement;
-
-        if (oldElement && oldElement._keymap && newChild && oldElement._keymap[newChild.key]) {
-          oldChild = oldElement._keymap[newChild.key];
-          if (!newChild._keymap) {
-            newChild._keymap = {};
-          }
-          newChild._keymap[newChild.key] = newChild;
-          const index = next.oldChildren.indexOf(oldChild);
-          next.oldChildren.splice(index, 1);
-          isKeyedItem = true;
-        } else {
-          oldChild = next.oldChildren.shift();
-          isKeyedItem = false;
-        }
-
-        if (newChild._stem) {
-          currentRoot = newChild;
-        }
-
-        stack.push({
-          newElement: newChild,
-          oldElement: oldChild,
-          newChildren: null,
-          oldChildren: null,
-          parsed: false,
-          difference: null,
-          root: currentRoot,
-          context
-        });
+        stack.push(createNextStackState(context, next, oldElement));
       }
     }
   }

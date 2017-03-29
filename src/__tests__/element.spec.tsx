@@ -22,6 +22,9 @@ import {
   cloneElement
 } from '../element';
 import {
+  FuelStem
+} from '../stem';
+import {
   Fuel,
   React
 } from '../fuel';
@@ -31,9 +34,7 @@ import {
 
 
 const enum Flags {
-  WILL_MOUNT = 0x00000001,
   DID_MOUNT = 0x00000002,
-  WILL_UPDATE = 0x00000004,
   DID_UPDATE = 0x00000008,
   WILL_UNMOUNT = 0x00000010
 }
@@ -44,9 +45,7 @@ class Component extends Fuel.Component<any, any> {
   public static constructed = 0;
   constructor(p, c) {super(p, c);Component.constructed++;}
   render() {return <div className="rendered-tree"></div>}
-  componentWillMount() {this.flags |= Flags.WILL_MOUNT}
   componentDidMount() {this.flags |= Flags.DID_MOUNT}
-  componentWillUpdate() {this.flags |= Flags.WILL_UPDATE}
   componentDidUpdate() {this.flags |= Flags.DID_UPDATE}
   componentWillUnmount() {this.flags |= Flags.WILL_UNMOUNT}
 }
@@ -82,6 +81,7 @@ describe('element', () => {
       it('check whether element is component or not', () => {
         const componentEl = makeFuelElement(Component, null, [])
         const el          = makeFuelElement(2, null, [])
+        componentEl._stem = new FuelStem();
         expect(FuelElementView.isComponent(componentEl)).to.be.true;
         expect(FuelElementView.isComponent(el)).to.be.false;
       })
@@ -92,6 +92,7 @@ describe('element', () => {
         const componentEl = makeFuelElement(Component, null, [])
         const stlessEl    = makeFuelElement(() => null, null, [])
         const el          = makeFuelElement(2, null, [])
+        componentEl._stem = new FuelStem();
         expect(FuelElementView.isStatelessComponent(componentEl)).to.be.false;
         expect(FuelElementView.isStatelessComponent(stlessEl)).to.be.true;
         expect(FuelElementView.isStatelessComponent(el)).to.be.false;
@@ -140,6 +141,7 @@ describe('element', () => {
       it('return rendered tree of component.', () => {
         const divId = FuelElementView.allocateTagName('div');
         const el = makeFuelElement(Component, null, []);
+        el._stem = new FuelStem();
         FuelElementView.instantiateComponent({}, el, null);
         const tree = FuelElementView.getComponentRenderedTree(el);
         expect(tree).to.be.deep.equal({
@@ -147,7 +149,7 @@ describe('element', () => {
           key                                : null,
           props                              : [{name: 'className', value: 'rendered-tree'}],
           dom                                : null,
-          _stem                              : null,
+          _stem                              : el._stem,
           _componentInstance                 : el._componentInstance,
           _componentRenderedElementTreeCache : null,
           _keymap                            : null,
@@ -160,16 +162,13 @@ describe('element', () => {
     describe('@invoke*', () => {
       it('invoke component lifecycle hook', () => {
         const el = makeFuelElement(Component, null, []);
+        el._stem = new FuelStem();
         FuelElementView.instantiateComponent({}, el, null);
         const instance: Component = el._componentInstance as any;
         FuelElementView.invokeDidMount(el);
         expect(instance.flags & Flags.DID_MOUNT).to.be.eq(Flags.DID_MOUNT);
         FuelElementView.invokeDidUpdate(el);
         expect(instance.flags & Flags.DID_UPDATE).to.be.eq(Flags.DID_UPDATE);
-        FuelElementView.invokeWillMount(el);
-        expect(instance.flags & Flags.WILL_MOUNT).to.be.eq(Flags.WILL_MOUNT);
-        FuelElementView.invokeWillUpdate(el);
-        expect(instance.flags & Flags.WILL_UPDATE).to.be.eq(Flags.WILL_UPDATE);
         FuelElementView.invokeWillUnmount(el);
         expect(instance.flags & Flags.WILL_UNMOUNT).to.be.eq(Flags.WILL_UNMOUNT);
       });
@@ -214,6 +213,7 @@ describe('element', () => {
       it('instantiate FuelComponent', () => {
         const divId = FuelElementView.allocateTagName('div');
         const el = makeFuelElement(Component2, null, [{name: 'className', value: 'test'}]);
+        el._stem = new FuelStem();
         const [rendered] = FuelElementView.instantiateComponent({}, el, null);
 
         expect(el).to.be.deep.eq({
@@ -234,7 +234,7 @@ describe('element', () => {
           key                                : null,
           props                              : [{name: 'className', value: 'test'}],
           dom                                : null,
-          _stem                              : null,
+          _stem                              : el._stem,
           _componentInstance                 : el._componentInstance,
           _componentRenderedElementTreeCache : null,
           _keymap                            : null,
@@ -246,6 +246,7 @@ describe('element', () => {
 
       it('instantiate FuelComponent once', () => {
         const el = makeFuelElement(Component, null, [{name: 'className', value: 'test'}]);
+        el._stem = new FuelStem();
         expect(Component.constructed).to.be.eq(0);
         FuelElementView.instantiateComponent({}, el, null);
         FuelElementView.instantiateComponent({}, el, null);

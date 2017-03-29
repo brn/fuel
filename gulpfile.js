@@ -84,6 +84,7 @@ gulp.task('minify-debug', ['typescript'], done => {
  */
 function minify({file, uglify = false, sourceMaps = false, onEnd = null, builtins = true, filesize = false, isTsify = true}) {
   const browserify = require('browserify');
+  const collapse   = require('bundle-collapser/plugin');
   const tsify      = require('tsify');
   const source     = require('vinyl-source-stream');
   const buffer     = require('vinyl-buffer');
@@ -108,6 +109,7 @@ function minify({file, uglify = false, sourceMaps = false, onEnd = null, builtin
     }
     return b;
   })()
+    .plugin(collapse)
     .bundle()
     .pipe(source(`${path.basename(file).replace(/\.[^.]+$/, '')}.bundle.js`))
     .pipe(derequire())

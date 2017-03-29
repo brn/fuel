@@ -14,12 +14,12 @@
  * @fileoverview
  * @author Taketoshi Aono
  */
-import { FuelElement, FuelComponent, StatelessComponent, FuelComponentStatic, FuelNode, ReactCompatiblePropsTypes } from './type';
+import { FuelElement, FuelComponent, StatelessComponent, FuelComponentStatic, FuelNode, ReactCompatiblePropsTypes, HTMLAttributes } from './type';
 import { cloneElement } from './element';
-import { HTMLAttributes } from './dom-attr';
 export declare class ComponentImpl<Props, State> implements FuelComponent<Props, State> {
     private _props;
     private _context;
+    state: State;
     constructor(_props?: Props, _context?: {});
     refs?: {
         [key: string]: FuelComponent<any, any> | Element;

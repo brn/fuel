@@ -11,21 +11,25 @@ import {
 } from 'fueldom';
 
 
-const PATH_REGEXP = /^:(.+)$/;
+const PATH_REGEXP = /^\:(.+)$/;
 
 
 function parseURL(url?: string) {
-  const paths = url? url.split('/'): location.hash.slice(1).split('/');
+  let path = url || location.hash.slice(1);
 
-  if (!paths[0]) {
-    paths[0] = '/'
+  if (!path) {
+    path = '/';
   }
 
-  if (paths.length && paths[paths.length - 1] === '') {
-    paths.splice(paths.length - 1, 1);
+  if (path.charAt(0) !== '/') {
+    path = `/${path}`;
   }
 
-  return paths;
+  if (path.length > 1 && path.charAt(path.length - 1) === '/') {
+    path = path.slice(0, path.length - 1);
+  }
+
+  return path;
 }
 
 
@@ -50,31 +54,43 @@ class Router extends Fuel.Component<any, any> {
 
 
 class Route extends Fuel.Component<any, any> {
-  public render() {
-    const paths = parseURL(this.props.path);
-    const Component = this.props.component;
-    const location = this.props.location.slice();
-    const length = location.length;
-    const params = {...this.props.params || {}};
-    const match = paths.every((path, i) => {
-      if (PATH_REGEXP.test(path)) {
-        params[path.match(PATH_REGEXP)[1]] = location.shift();
-        return true;
-      } else if (path === location[0]) {
-        location.shift();
-        return true;
-      }
-      return false;
-    });
+  private matchs;
 
-    if ((length !== location.length && Fuel.Children.toArray(this.props.children).filter(t => t.type === Route).length) || (match && !location.length)) {
-      const children = Fuel.Children.map(this.props.children, child => Fuel.cloneElement(child, {location: location, params}));
+  private params = {};
+
+  private parent;
+
+  public render() {
+    const Component = this.props.component;
+    const location = this.props.location;
+    const parent = this.parent;
+    if (this.matchs && this.matchs.length > 0) {
+      const children = Fuel.Children.map(this.props.children, child => Fuel.cloneElement(child, {location, parent, params: this.params}));
       if (Component) {
-        return <Component>{children}</Component>;
+        return <Component params={this.params}>{children}</Component>;
       }
-      return <div>{children}</div>
+      return <div>{children}</div>;
+    } else if (Fuel.Children.toArray(this.props.children).filter(child => child.type === Route).length) {
+      return <div>{Fuel.Children.map(this.props.children, child => Fuel.cloneElement(child, {location, parent}))}</div>;
     }
     return null;
+  }
+
+
+  public componentWillMount() {
+    const {location} = this.props;
+    this.parent = `${this.props.parent? this.props.parent: ''}${parseURL(this.props.path)}`;
+    let match
+    const ids = [];
+    const replaced = this.parent.replace(/\:[^\/]+/g, id => {
+      ids.push(id.slice(1));
+      return '([^/]+)';
+    });
+    const regexp = new RegExp(`^${replaced}$`);
+    this.matchs = location.match(regexp);
+    if (this.matchs && this.matchs.length > 0) {
+      this.matchs.slice(1).forEach((match, index) => this.params[ids[index]] = match);
+    }
   }
 }
 
@@ -120,7 +136,9 @@ FuelDOM.render((
     <Route path="/" component={Counter}/>
     <Route path="/test">
       <Route path="foo" component={Test}/>
-      <Route path=":id" component={HandleId}/>
+      <Route path="bar">
+        <Route path=":id" component={HandleId}/>
+      </Route>
     </Route>
   </Router>
 ), document.getElementById('app') as any);
