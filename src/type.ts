@@ -106,7 +106,6 @@ export interface FuelElement {
   _componentRenderedElementTreeCache?: FuelElement;
   _keymap?: {[key: string]: FuelElement};
   _subscriptions?: ESSubscription[];
-  _parent: FuelElement|null;
 }
 
 

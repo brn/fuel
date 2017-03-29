@@ -45,7 +45,7 @@ export class SharedEventHandlerImpl implements SharedEventHandler {
       root['__events'][type] = true;
       const handler = (e: Event) => {
         const eventInfo = e.target['__fuelevent'];
-        if (eventInfo[e.type] && eventInfo[e.type] === id) {
+        if (eventInfo && eventInfo[e.type] && eventInfo[e.type] === id) {
           const callback = this.events[e.type][id];
           if (callback) {
             callback(e);

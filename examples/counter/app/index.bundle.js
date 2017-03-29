@@ -365,6 +365,7 @@ var FuelElementView = (function () {
                 }
                 rendered._stem = fuelElement._stem;
             }
+            fuelElement._stem.registerOwner(fuelElement);
             return [rendered, newContext];
         }
         util_1.invariant(true, "factory element requried but got " + this.tagNameOf(fuelElement) + ".");
@@ -479,7 +480,6 @@ function cloneElement(fuelElement, props, children) {
     el._componentInstance = fuelElement._componentInstance;
     el._componentRenderedElementTreeCache = fuelElement._componentRenderedElementTreeCache;
     el._subscriptions = fuelElement._subscriptions;
-    el._parent = fuelElement._parent;
     return el;
 }
 exports.cloneElement = cloneElement;
@@ -520,7 +520,6 @@ function makeFuelElement(type, key, props, children) {
         _a._componentRenderedElementTreeCache = null,
         _a._keymap = null,
         _a._subscriptions = null,
-        _a._parent = null,
         _a;
     var _a;
 }
@@ -565,7 +564,7 @@ var SharedEventHandlerImpl = (function () {
             root['__events'][type] = true;
             var handler = function (e) {
                 var eventInfo = e.target['__fuelevent'];
-                if (eventInfo[e.type] && eventInfo[e.type] === id) {
+                if (eventInfo && eventInfo[e.type] && eventInfo[e.type] === id) {
                     var callback_1 = _this.events[e.type][id];
                     if (callback_1) {
                         callback_1(e);
@@ -659,7 +658,7 @@ var util_1 = _dereq_("./util");
  * @param skipArray Skip checking array type.
  * @returns Flattened array of FuelElement.
  */
-function checkChildren(arr, el, skipArray) {
+function checkChildren(arr, skipArray) {
     if (skipArray === void 0) { skipArray = false; }
     var ret = [];
     for (var i = 0, len = arr.length; i < len; i++) {
@@ -670,17 +669,15 @@ function checkChildren(arr, el, skipArray) {
         util_1.invariant(v === undefined, 'Undefined passed as element, it\'s seem to misstakes.');
         if (element_1.FuelElementView.isFuelElement(v)) {
             ret.push(v);
-            v._parent = el;
         }
         else if (!skipArray && Array.isArray(v)) {
             // We do not check inside children array.
             // So if array exists in children array,
             // that treated as text.
-            ret = checkChildren(v, el, true).concat(ret);
+            ret = checkChildren(v, true).concat(ret);
         }
         else {
             var textNode = createTextNode(v.toString());
-            textNode._parent = el;
             ret.push(textNode);
         }
     }
@@ -762,6 +759,9 @@ var Fuel = (function () {
         if (!props) {
             props = {};
         }
+        if (children.length) {
+            children = checkChildren(children);
+        }
         // Convert props object to array.
         // Because for in loop is too slow and props will iterate many times.
         var attributes = [];
@@ -771,10 +771,7 @@ var Fuel = (function () {
                 attributes.push({ name: name_1, value: value });
             }
         }
-        var el = element_1.makeFuelElement(typeof type === 'string' ? element_1.FuelElementView.allocateTagName(type) : type, props.key, attributes, []);
-        if (children.length) {
-            el.children = checkChildren(children, el);
-        }
+        var el = element_1.makeFuelElement(typeof type === 'string' ? element_1.FuelElementView.allocateTagName(type) : type, props.key, attributes, children);
         // If element is component, We set stem to this FuelElement.
         if (element_1.FuelElementView.isComponent(el) || props.scoped) {
             el._stem = new stem_1.FuelStem();
@@ -916,7 +913,7 @@ var util_1 = _dereq_("./util");
 function createStem() {
     return new FuelStem();
 }
-function replaceElement(root, oldElement, newElement, isKeyedItems, renderer) {
+function replaceElement(root, parent, oldElement, newElement, isKeyedItems, renderer) {
     var newDom = element_1.FuelElementView.createDomElement(root, newElement, renderer, createStem);
     var oldDom = oldElement.dom;
     if (oldDom.nodeType === 1 && newDom.nodeType === 1) {
@@ -924,15 +921,14 @@ function replaceElement(root, oldElement, newElement, isKeyedItems, renderer) {
             newElement.dom.appendChild(oldDom.children[i]);
         }
     }
+    var parentDom = parent.dom;
     if (!isKeyedItems) {
-        var parent_1 = newElement._parent.dom;
-        parent_1.replaceChild(newDom, oldDom);
+        parentDom.replaceChild(newDom, oldDom);
         clean(root, oldElement);
     }
     else {
-        var parent_2 = newElement._parent.dom;
-        parent_2.removeChild(oldDom);
-        parent_2.appendChild(newDom);
+        parentDom.removeChild(oldDom);
+        parentDom.appendChild(newDom);
     }
     oldElement.dom = null;
 }
@@ -1014,7 +1010,7 @@ function update(_a) {
             var tree = tree_1.fastCreateDomTree(context, root, newElement, renderer, createStem);
             if (oldElement) {
                 element_1.FuelElementView.invokeWillMount(newElement);
-                newElement._parent.dom.appendChild(tree);
+                parent.dom.appendChild(tree);
                 element_1.FuelElementView.invokeDidMount(newElement);
                 element_1.FuelElementView.invokeWillUnmount(oldElement);
                 clean(root, oldElement);
@@ -1024,19 +1020,19 @@ function update(_a) {
     else if (difference_1.isRemoveElement(difference)) {
         element_1.FuelElementView.invokeWillUnmount(oldElement);
         oldElement.dom.parentNode.removeChild(oldElement.dom);
+        oldElement._stem = null;
         clean(root, oldElement);
     }
     else if (difference_1.isReplaceElement(difference)) {
         element_1.FuelElementView.invokeWillMount(newElement);
         element_1.FuelElementView.invokeWillUnmount(oldElement);
-        replaceElement(root, oldElement, newElement, isKeyedItem, renderer);
+        replaceElement(root, parent, oldElement, newElement, isKeyedItem, renderer);
         element_1.FuelElementView.invokeDidMount(newElement);
     }
     else if (difference_1.isTextChanged(difference)) {
         element_1.FuelElementView.invokeWillUpdate(newElement);
-        newElement.dom = element_1.FuelElementView.createDomElement(root, newElement, FuelStem.renderer, createStem);
-        parent.dom.appendChild(newElement.dom);
-        parent.dom.removeChild(oldElement.dom);
+        newElement.dom = oldElement.dom;
+        newElement.dom.textContent = element_1.FuelElementView.getTextValueOf(newElement);
         element_1.FuelElementView.invokeDidUpdate(newElement);
     }
     else {
@@ -1050,7 +1046,9 @@ function update(_a) {
     }
 }
 var FuelStem = (function () {
-    function FuelStem() {
+    function FuelStem(tree) {
+        if (tree === void 0) { tree = null; }
+        this.tree = tree;
         this._enabled = true;
         this.batchs = [];
         this.batchCallback = null;
@@ -1103,13 +1101,42 @@ var FuelStem = (function () {
             this.renderAtAnimationFrame();
         }
         else {
-            callback(this.attach(el));
+            callback(this.attach(el, updateOwnwer));
         }
     };
-    FuelStem.prototype.attach = function (el) {
+    FuelStem.prototype.attach = function (el, updateOwner) {
         var domTree = tree_1.fastCreateDomTree({}, el, el, FuelStem.renderer, createStem);
-        this.tree = el;
+        if (updateOwner) {
+            this.tree = el;
+        }
         return domTree;
+    };
+    FuelStem.prototype.patchComponent = function (context, newElement, oldElement) {
+        if (newElement && element_1.FuelElementView.isComponent(newElement)) {
+            if (oldElement && oldElement.type !== newElement.type) {
+                while (newElement && element_1.FuelElementView.isComponent(newElement)) {
+                    _a = element_1.FuelElementView.instantiateComponent(context, newElement), newElement = _a[0], context = _a[1];
+                }
+            }
+            else {
+                while (newElement && element_1.FuelElementView.isComponent(newElement)) {
+                    if (newElement && oldElement && newElement.type === oldElement.type) {
+                        newElement._componentInstance = oldElement._componentInstance;
+                    }
+                    var _b = element_1.FuelElementView.instantiateComponent(context, newElement, oldElement), stripedNewTree = _b[0], newContext = _b[1];
+                    context = newContext;
+                    if (oldElement && element_1.FuelElementView.isComponent(oldElement)) {
+                        oldElement = oldElement._componentRenderedElementTreeCache;
+                    }
+                    newElement = stripedNewTree;
+                }
+            }
+        }
+        if (oldElement && element_1.FuelElementView.isComponent(oldElement)) {
+            oldElement = element_1.FuelElementView.stripComponent(oldElement);
+        }
+        return [context, newElement, oldElement];
+        var _a;
     };
     FuelStem.prototype.patch = function (root) {
         if (this.batchs.length) {
@@ -1127,35 +1154,28 @@ var FuelStem = (function () {
                 root: root
             }
         ];
-        if (this.tree._stem) {
-            root._stem = this.tree._stem;
-        }
         var parent = null;
         var isKeyedItem = false;
         var context = stack[0].context;
-        var oldTree = this.tree;
-        var newTree = root;
-        while (newTree && element_1.FuelElementView.isComponent(newTree)) {
-            var _a = element_1.FuelElementView.instantiateComponent(context, newTree, oldTree), stripedNewTree = _a[0], newContext = _a[1];
-            context = newContext;
-            if (oldTree && element_1.FuelElementView.isComponent(oldTree)) {
-                oldTree = oldTree._componentRenderedElementTreeCache;
-                stack[0].oldElement = oldTree;
-            }
-            newTree = stripedNewTree;
-            stack[0].context = context;
-            stack[0].newElement = stripedNewTree;
-        }
-        if (oldTree && element_1.FuelElementView.isComponent(oldTree)) {
-            oldTree = element_1.FuelElementView.stripComponent(oldTree);
-            stack[0].oldElement = oldTree;
-        }
         while (stack.length) {
             var next = stack.pop();
             var newElement = next.newElement, oldElement = next.oldElement;
             var difference = void 0;
             var currentRoot = next.root;
             if (!next.parsed) {
+                _a = this.patchComponent(context, newElement, oldElement), context = _a[0], newElement = _a[1], oldElement = _a[2];
+                if (!newElement && !oldElement) {
+                    continue;
+                }
+                if (newElement && oldElement) {
+                    newElement._stem = oldElement._stem;
+                }
+                next.newElement = newElement;
+                next.oldElement = oldElement;
+                next.context = context;
+                if (newElement && newElement._stem) {
+                    currentRoot = next.newElement;
+                }
                 difference = difference_1.diff(oldElement, newElement);
                 next.difference = difference;
                 this.batchs.push({
@@ -1193,37 +1213,8 @@ var FuelStem = (function () {
                     oldChild = next.oldChildren.shift();
                     isKeyedItem = false;
                 }
-                if (newChild && newChild._stem) {
+                if (newChild._stem) {
                     currentRoot = newChild;
-                }
-                context = next.context;
-                if (newChild && element_1.FuelElementView.isComponent(newChild)) {
-                    newChild._stem.registerOwner(newChild);
-                    if (oldChild && element_1.FuelElementView.isComponent(oldChild)) {
-                        newChild._componentInstance = oldChild._componentInstance;
-                        newChild._componentRenderedElementTreeCache = oldChild._componentRenderedElementTreeCache;
-                        while (oldChild && element_1.FuelElementView.isComponent(oldChild)) {
-                            oldChild = oldChild._componentRenderedElementTreeCache;
-                        }
-                        while (newChild && element_1.FuelElementView.isComponent(newChild)) {
-                            _b = element_1.FuelElementView.instantiateComponent(context, newChild), newChild = _b[0], context = _b[1];
-                        }
-                    }
-                    else {
-                        while (newChild && element_1.FuelElementView.isComponent(newChild)) {
-                            var _c = element_1.FuelElementView.instantiateComponent(context, newChild, null), renderedTree = _c[0], newContext = _c[1];
-                            context = newContext;
-                            newChild = renderedTree;
-                        }
-                    }
-                }
-                else if (oldChild && element_1.FuelElementView.isComponent(oldChild)) {
-                    while (oldChild && element_1.FuelElementView.isComponent(oldChild)) {
-                        oldChild = oldChild._componentRenderedElementTreeCache;
-                    }
-                }
-                if (!newChild && !oldChild) {
-                    continue;
                 }
                 stack.push({
                     newElement: newChild,
@@ -1237,7 +1228,7 @@ var FuelStem = (function () {
                 });
             }
         }
-        var _b;
+        var _a;
     };
     return FuelStem;
 }());
@@ -1320,7 +1311,9 @@ function fastCreateDomTree(context, rootElement, fuelElement, renderer, createSt
 exports.fastCreateDomTree = fastCreateDomTree;
 function renderComponent(oldContext, fuelElement, createStem) {
     var _a = element_1.FuelElementView.instantiateComponent(oldContext, fuelElement, null), nodes = _a[0], context = _a[1];
-    fuelElement._stem.registerOwner(fuelElement);
+    if (nodes) {
+        fuelElement._stem.registerOwner(fuelElement);
+    }
     return [nodes, context];
 }
 
@@ -1696,6 +1689,7 @@ var __asyncValues;
 Object.defineProperty(exports, "__esModule", { value: true });
 var tslib_1 = require("tslib");
 var fueldom_1 = require("fueldom");
+var PATH_REGEXP = /^:(.+)$/;
 function parseURL(url) {
     var paths = url ? url.split('/') : location.hash.slice(1).split('/');
     if (!paths[0]) {
@@ -1734,17 +1728,30 @@ var Route = (function (_super) {
     }
     Route.prototype.render = function () {
         var paths = parseURL(this.props.path);
-        var length = paths.length;
         var Component = this.props.component;
-        var match = this.props.location.every(function (path, i) {
-            if (path === paths[0]) {
-                paths.shift();
+        var location = this.props.location.slice();
+        var length = location.length;
+        var params = tslib_1.__assign({}, this.props.params || {});
+        var match = paths.every(function (path, i) {
+            if (PATH_REGEXP.test(path)) {
+                params[path.match(PATH_REGEXP)[1]] = location.shift();
+                return true;
+            }
+            else if (path === location[0]) {
+                location.shift();
                 return true;
             }
             return false;
         });
-        return (length !== paths.length && fueldom_1.Fuel.Children.count(this.props.children)) || match ?
-            fueldom_1.React.createElement(Component, null, fueldom_1.Fuel.Children.map(this.props.children, function (child) { return fueldom_1.Fuel.cloneElement(child, { location: location }); })) : null;
+        if ((length !== location.length && fueldom_1.Fuel.Children.toArray(this.props.children).filter(function (t) { return t.type === Route; }).length) || (match && !location.length)) {
+            var children = fueldom_1.Fuel.Children.map(this.props.children, function (child) { return fueldom_1.Fuel.cloneElement(child, { location: location, params: params }); });
+            console.log(children);
+            if (Component) {
+                return fueldom_1.React.createElement(Component, null, children);
+            }
+            return fueldom_1.React.createElement("div", null, children);
+        }
+        return null;
     };
     return Route;
 }(fueldom_1.Fuel.Component));
@@ -1783,9 +1790,23 @@ var Test = (function (_super) {
     };
     return Test;
 }(fueldom_1.Fuel.Component));
+var HandleId = (function (_super) {
+    tslib_1.__extends(HandleId, _super);
+    function HandleId() {
+        return _super !== null && _super.apply(this, arguments) || this;
+    }
+    HandleId.prototype.render = function () {
+        return fueldom_1.React.createElement("span", null,
+            "ID: ",
+            this.props.params.id);
+    };
+    return HandleId;
+}(fueldom_1.Fuel.Component));
 fueldom_1.FuelDOM.render((fueldom_1.React.createElement(Router, null,
     fueldom_1.React.createElement(Route, { path: "/", component: Counter }),
-    fueldom_1.React.createElement(Route, { path: "/test", component: Test }))), document.getElementById('app'));
+    fueldom_1.React.createElement(Route, { path: "/test" },
+        fueldom_1.React.createElement(Route, { path: "foo", component: Test }),
+        fueldom_1.React.createElement(Route, { path: ":id", component: HandleId })))), document.getElementById('app'));
 
 },{"fueldom":1,"tslib":3}],3:[function(require,module,exports){
 (function (global){

@@ -6,6 +6,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 var tslib_1 = require("tslib");
 var fueldom_1 = require("fueldom");
+var PATH_REGEXP = /^:(.+)$/;
 function parseURL(url) {
     var paths = url ? url.split('/') : location.hash.slice(1).split('/');
     if (!paths[0]) {
@@ -44,17 +45,30 @@ var Route = (function (_super) {
     }
     Route.prototype.render = function () {
         var paths = parseURL(this.props.path);
-        var length = paths.length;
         var Component = this.props.component;
-        var match = this.props.location.every(function (path, i) {
-            if (path === paths[0]) {
-                paths.shift();
+        var location = this.props.location.slice();
+        var length = location.length;
+        var params = tslib_1.__assign({}, this.props.params || {});
+        var match = paths.every(function (path, i) {
+            if (PATH_REGEXP.test(path)) {
+                params[path.match(PATH_REGEXP)[1]] = location.shift();
+                return true;
+            }
+            else if (path === location[0]) {
+                location.shift();
                 return true;
             }
             return false;
         });
-        return (length !== paths.length && fueldom_1.Fuel.Children.count(this.props.children)) || match ?
-            fueldom_1.React.createElement(Component, null, fueldom_1.Fuel.Children.map(this.props.children, function (child) { return fueldom_1.Fuel.cloneElement(child, { location: location }); })) : null;
+        if ((length !== location.length && fueldom_1.Fuel.Children.toArray(this.props.children).filter(function (t) { return t.type === Route; }).length) || (match && !location.length)) {
+            var children = fueldom_1.Fuel.Children.map(this.props.children, function (child) { return fueldom_1.Fuel.cloneElement(child, { location: location, params: params }); });
+            console.log(children);
+            if (Component) {
+                return fueldom_1.React.createElement(Component, null, children);
+            }
+            return fueldom_1.React.createElement("div", null, children);
+        }
+        return null;
     };
     return Route;
 }(fueldom_1.Fuel.Component));
@@ -93,6 +107,20 @@ var Test = (function (_super) {
     };
     return Test;
 }(fueldom_1.Fuel.Component));
+var HandleId = (function (_super) {
+    tslib_1.__extends(HandleId, _super);
+    function HandleId() {
+        return _super !== null && _super.apply(this, arguments) || this;
+    }
+    HandleId.prototype.render = function () {
+        return fueldom_1.React.createElement("span", null,
+            "ID: ",
+            this.props.params.id);
+    };
+    return HandleId;
+}(fueldom_1.Fuel.Component));
 fueldom_1.FuelDOM.render((fueldom_1.React.createElement(Router, null,
     fueldom_1.React.createElement(Route, { path: "/", component: Counter }),
-    fueldom_1.React.createElement(Route, { path: "/test", component: Test }))), document.getElementById('app'));
+    fueldom_1.React.createElement(Route, { path: "/test" },
+        fueldom_1.React.createElement(Route, { path: "foo", component: Test }),
+        fueldom_1.React.createElement(Route, { path: ":id", component: HandleId })))), document.getElementById('app'));

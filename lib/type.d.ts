@@ -86,7 +86,6 @@ export interface FuelElement {
         [key: string]: FuelElement;
     };
     _subscriptions?: ESSubscription[];
-    _parent: FuelElement | null;
 }
 export interface BuiltinFuelElement extends FuelElement {
     type: string;

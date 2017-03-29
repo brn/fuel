@@ -11,6 +11,9 @@ import {
 } from 'fueldom';
 
 
+const PATH_REGEXP = /^:(.+)$/;
+
+
 function parseURL(url?: string) {
   const paths = url? url.split('/'): location.hash.slice(1).split('/');
 
@@ -49,18 +52,29 @@ class Router extends Fuel.Component<any, any> {
 class Route extends Fuel.Component<any, any> {
   public render() {
     const paths = parseURL(this.props.path);
-    const length = paths.length;
     const Component = this.props.component;
-    const match = this.props.location.every((path, i) => {
-      if (path === paths[0]) {
-        paths.shift();
-        return true
+    const location = this.props.location.slice();
+    const length = location.length;
+    const params = {...this.props.params || {}};
+    const match = paths.every((path, i) => {
+      if (PATH_REGEXP.test(path)) {
+        params[path.match(PATH_REGEXP)[1]] = location.shift();
+        return true;
+      } else if (path === location[0]) {
+        location.shift();
+        return true;
       }
       return false;
     });
 
-    return (length !==  paths.length && Fuel.Children.count(this.props.children)) || match?
-           <Component>{Fuel.Children.map(this.props.children, child => Fuel.cloneElement(child, {location: location}))}</Component>: null;
+    if ((length !== location.length && Fuel.Children.toArray(this.props.children).filter(t => t.type === Route).length) || (match && !location.length)) {
+      const children = Fuel.Children.map(this.props.children, child => Fuel.cloneElement(child, {location: location, params}));
+      if (Component) {
+        return <Component>{children}</Component>;
+      }
+      return <div>{children}</div>
+    }
+    return null;
   }
 }
 
@@ -94,9 +108,19 @@ class Test extends Fuel.Component<any, any> {
   }
 }
 
+
+class HandleId extends Fuel.Component<any, any> {
+  render() {
+    return <span>ID: {this.props.params.id}</span>;
+  }
+}
+
 FuelDOM.render((
   <Router>
     <Route path="/" component={Counter}/>
-    <Route path="/test" component={Test}/>
+    <Route path="/test">
+      <Route path="foo" component={Test}/>
+      <Route path=":id" component={HandleId}/>
+    </Route>
   </Router>
 ), document.getElementById('app') as any);

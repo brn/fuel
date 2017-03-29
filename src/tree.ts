@@ -121,6 +121,8 @@ export function fastCreateDomTree(
 
 function renderComponent(oldContext: any, fuelElement: FuelElement, createStem: () => Stem) {
   const [nodes, context] = FuelElementView.instantiateComponent(oldContext, fuelElement, null);
-  fuelElement._stem.registerOwner(fuelElement);
+  if (nodes) {
+    fuelElement._stem.registerOwner(fuelElement);
+  }
   return [nodes, context];
 }

@@ -222,6 +222,8 @@ export class FuelElementView {
         }
         rendered._stem = fuelElement._stem;
       }
+      fuelElement._stem.registerOwner(fuelElement);
+
       return [rendered, newContext];
     }
 
@@ -339,7 +341,6 @@ export function cloneElement(fuelElement: FuelElement, props: any = {}, children
   el._componentInstance = fuelElement._componentInstance
   el._componentRenderedElementTreeCache = fuelElement._componentRenderedElementTreeCache;
   el._subscriptions = fuelElement._subscriptions;
-  el._parent = fuelElement._parent;
   return el;
 }
 
@@ -380,7 +381,6 @@ export function makeFuelElement(type: FuelComponentType, key: string|number = nu
     _componentInstance                 : null,
     _componentRenderedElementTreeCache : null,
     _keymap                            : null,
-    _subscriptions                     : null,
-    _parent                            : null
+    _subscriptions                     : null
   }
 }

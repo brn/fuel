@@ -17,12 +17,13 @@
 import { FuelElement, SharedEventHandler, Stem } from './type';
 import { Renderer } from './renderer/renderer';
 export declare class FuelStem implements Stem {
+    private tree;
     static renderer: Renderer;
     private _enabled;
-    private tree;
     private batchs;
     private batchCallback;
     private sharedEventHandler;
+    constructor(tree?: FuelElement);
     enterUnsafeUpdateZone(cb: () => void): void;
     registerOwner(owner: FuelElement): void;
     owner(): FuelElement;
@@ -30,6 +31,7 @@ export declare class FuelStem implements Stem {
     getEventHandler(): SharedEventHandler;
     private renderAtAnimationFrame();
     render(el: FuelElement, callback?: (el: Node) => void, updateOwnwer?: boolean): void;
-    private attach(el);
+    private attach(el, updateOwner);
+    private patchComponent(context, newElement, oldElement);
     private patch(root);
 }

@@ -59,7 +59,7 @@ import {
  * @param skipArray Skip checking array type.
  * @returns Flattened array of FuelElement.
  */
-function checkChildren(arr: (FuelElement|any)[], el: FuelElement, skipArray = false) {
+function checkChildren(arr: (FuelElement|any)[], skipArray = false) {
   let ret = [];
   for (let i = 0, len = arr.length; i < len; i++) {
     const v = arr[i];
@@ -71,15 +71,13 @@ function checkChildren(arr: (FuelElement|any)[], el: FuelElement, skipArray = fa
 
     if (FuelElementView.isFuelElement(v)) {
       ret.push(v);
-      v._parent = el;
     } else if (!skipArray && Array.isArray(v)) {
       // We do not check inside children array.
       // So if array exists in children array,
       // that treated as text.
-      ret = checkChildren(v, el, true).concat(ret);
+      ret = checkChildren(v, true).concat(ret);
     } else {
       const textNode = createTextNode(v.toString());
-      textNode._parent = el;
       ret.push(textNode);
     }
   }
@@ -170,6 +168,10 @@ export class Fuel {
       props = {} as any;
     }
 
+    if (children.length) {
+      children = checkChildren(children);
+    }
+
     // Convert props object to array.
     // Because for in loop is too slow and props will iterate many times.
     let attributes: Property[] = [];
@@ -180,10 +182,7 @@ export class Fuel {
       }
     }
 
-    const el = makeFuelElement(typeof type === 'string'? FuelElementView.allocateTagName(type): type, props.key, attributes, []);
-    if (children.length) {
-      el.children = checkChildren(children, el);
-    }
+    const el = makeFuelElement(typeof type === 'string'? FuelElementView.allocateTagName(type): type, props.key, attributes, children);
 
     // If element is component, We set stem to this FuelElement.
     if (FuelElementView.isComponent(el) || props.scoped) {
