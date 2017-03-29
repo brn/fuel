@@ -17,6 +17,7 @@
 
 
 import {
+  PublicFuelElement,
   FuelElement,
   FuelComponentType,
   FuelComponent,
@@ -119,7 +120,7 @@ export class ComponentImpl<Props, State> implements FuelComponent<Props, State> 
 
   public ['shouldComponentUpdate'](nextProps, prevProps) {return true;}
 
-  public ['render'](): FuelElement {return null;}
+  public ['render'](): JSX.Element {return null;}
 
   public ['getChildContext']<CC extends {}>(): CC {return {} as CC;};
 
@@ -217,14 +218,14 @@ export class Fuel {
   public static createFactory = (tag: string) => () => Fuel.createElement(tag, {})
 
   public static Children = {
-    map<T>(children: FuelElement[]|null, cb: (el: FuelElement) => T): T[] {
+    map<T>(children: PublicFuelElement[]|null, cb: (el: PublicFuelElement) => T): T[] {
       return children? children.map(cb): [];
     },
-    forEach(children: FuelElement[]|null, cb: (el: FuelElement) => void): void {
+    forEach(children: PublicFuelElement[]|null, cb: (el: PublicFuelElement) => void): void {
       children && children.forEach(cb);
     },
-    count(children: FuelElement[]|null) {return children? children.length: 0;},
-    toArray(children: FuelElement[]|null) {return children? children: [];}
+    count(children: PublicFuelElement[]|null) {return children? children.length: 0;},
+    toArray(children: PublicFuelElement[]|null) {return children? children: [];}
   }
 
   // Compatible with react.

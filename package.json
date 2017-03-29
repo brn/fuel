@@ -1,6 +1,6 @@
 {
   "name": "fueldom",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "description": "",
   "main": "dist/index.bundle.js",
   "scripts": {
@@ -10,6 +10,14 @@
     "ut+ct": "gulp test-all",
     "ct": "gulp ct-chrome"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/brn/fueldom.git"
+  },
+  "bugs": {
+    "url": "https://github.com/brn/fueldom/issues"
+  },
+  "homepage": "https://github.com/brn/fueldom#readme",
   "author": "brn (Taketoshi Aono)",
   "license": "MIT",
   "devDependencies": {

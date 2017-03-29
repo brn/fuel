@@ -14,7 +14,7 @@
  * @fileoverview
  * @author Taketoshi Aono
  */
-import { FuelElement, FuelComponent, StatelessComponent, FuelComponentStatic, FuelNode, ReactCompatiblePropsTypes, HTMLAttributes } from './type';
+import { PublicFuelElement, FuelElement, FuelComponent, StatelessComponent, FuelComponentStatic, FuelNode, ReactCompatiblePropsTypes, HTMLAttributes } from './type';
 import { cloneElement } from './element';
 export declare class ComponentImpl<Props, State> implements FuelComponent<Props, State> {
     private _props;
@@ -33,7 +33,7 @@ export declare class ComponentImpl<Props, State> implements FuelComponent<Props,
     ['componentDidUpdate'](): void;
     ['componentWillReceiveProps'](props: Props): void;
     ['shouldComponentUpdate'](nextProps: any, prevProps: any): boolean;
-    ['render'](): FuelElement;
+    ['render'](): JSX.Element;
     ['getChildContext']<CC extends {}>(): CC;
     /**
      * Will be rewrited after.
@@ -70,10 +70,10 @@ export declare class Fuel {
     static cloneElement: typeof cloneElement;
     static createFactory: (tag: string) => () => FuelElement;
     static Children: {
-        map<T>(children: FuelElement[], cb: (el: FuelElement) => T): T[];
-        forEach(children: FuelElement[], cb: (el: FuelElement) => void): void;
-        count(children: FuelElement[]): number;
-        toArray(children: FuelElement[]): FuelElement[];
+        map<T>(children: PublicFuelElement[], cb: (el: PublicFuelElement) => T): T[];
+        forEach(children: PublicFuelElement[], cb: (el: PublicFuelElement) => void): void;
+        count(children: PublicFuelElement[]): number;
+        toArray(children: PublicFuelElement[]): PublicFuelElement[];
     };
     static PropTypes: ReactCompatiblePropsTypes;
 }
