@@ -1,10 +1,10 @@
 # What's this?
 
-**NOW THIS PRODUCT IS BETA**
+**THIS PROJECT IS NOW IN BETA**
 
 The FuelDOM is React compatible virtual-dom implementation.
 
-* File size is samller than Reactjs **8.79 KB gzipped(raw 24.92 KB)**
+* File size is smaller than Reactjs **8.79 KB gzipped (24.92 KB raw)**
 * No dependencies.
 * Change vdom patch function as using requestAnimationFrame and requestIdleCallback.
 * Compatible with jsx.
@@ -29,9 +29,9 @@ npm install fueldom --save
 
 ## Omitted
 
-* React.PropTypes.xxx runtime type checks(React.PropTypes is exists, but ignored).
+* React.PropTypes.xxx runtime type checks (React.PropTypes exists, but is ignored).
 * Style Property name check.
-* Some error checks(maybe implemented in future).
+* Some error checks (maybe implemented in future).
 
 ## Usage
 
@@ -66,10 +66,10 @@ FuelDOM.render(<Component/>, document.getElementById('app'));
 
 ### WE WILL DO
 
-* Improve code size to make it more samll.
-* Improve vdom patch method to make it more fast.
-* Original functionarity or api.
-* Partial vdom update system(get rid of shouldComponentUpdate) like [react-mvi](https://github.com/brn/react-mvi).
+* Improve code size to make it smaller.
+* Improve vdom patch method to make it faster.
+* Original functionality or api.
+* Partial vdom update system (get rid of shouldComponentUpdate) like [react-mvi](https://github.com/brn/react-mvi).
 
 ## Eco Systems
 
