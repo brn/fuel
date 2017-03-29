@@ -5,6 +5,7 @@
 The FuelDOM is React compatible virtual-dom implementation.
 
 * File size is samller than Reactjs **8.79 KB gzipped(raw 24.92 KB)**
+* No dependencies.
 * Change vdom patch function as using requestAnimationFrame and requestIdleCallback.
 * Compatible with jsx.
 
@@ -68,6 +69,7 @@ FuelDOM.render(<Component/>, document.getElementById('app'));
 * Improve code size to make it more samll.
 * Improve vdom patch method to make it more fast.
 * Original functionarity or api.
+* Partial vdom update system(get rid of shouldComponentUpdate) like [react-mvi](https://github.com/brn/react-mvi).
 
 ## Eco Systems
 
@@ -82,3 +84,4 @@ yarn install
 yarn run ut+ct
 yarn run minify
 ```
+Send PR!
