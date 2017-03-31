@@ -38,9 +38,10 @@ export interface Stem {
   enterUnsafeUpdateZone(cb: () => void): void;
   setEventHandler(eventHandler: SharedEventHandler): void;
   getEventHandler(): SharedEventHandler;
-  render(el: FuelElement, callback?: (el: Node) => void, context?: any, updateOwner?: boolean): void;
+  render(el: FuelElement, callback?: (el: FuelDOMNode) => void, context?: any, updateOwner?: boolean): void;
   registerOwner(el: FuelElement): void;
   owner(): FuelElement;
+  unmountComponent(fuelElement: FuelElement, cb: () => void): void;
 }
 
 
@@ -90,7 +91,7 @@ export interface ESObservable<T> {
 
 export interface PublicFuelElement {
   type: any;
-  props: Property[],
+  props: KeyMap<any>,
   key: string|number;
   children: FuelElement[];
 }
@@ -98,6 +99,8 @@ export interface PublicFuelElement {
 
 export interface FuelElement extends PublicFuelElement {
   dom: FuelDOMNode;
+  _unmounted: boolean;
+  _ownerElement: FuelElement,
   _stem?: Stem;
   _componentInstance?: FuelComponent<any, any>;
   _componentRenderedElementTreeCache?: FuelElement;

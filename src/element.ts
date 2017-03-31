@@ -34,7 +34,8 @@ import {
   Bytes,
   DOMEvents,
   DOMAttributes,
-  Stem
+  Stem,
+  KeyMap
 } from './type';
 import {
   setStyle
@@ -58,6 +59,7 @@ import {
 
 
 const FUEL_ELEMENT_MARK = Symbol('__fuel_element');
+const DOM_LINK = Symbol('__fuel_element_link');
 const TAG_NAMES = {map: {}, count: 1};
 const SYNTHETIC_TEXT = 'SYNTHETIC_TEXT';
 const PROTOTYPE = 'prototype';
@@ -102,6 +104,35 @@ export const FuelElementView = {
     return el.children.length > 0;
   },
 
+  cleanupElement(el: FuelElement) {
+    el = FuelElementView.stripComponent(el);
+    if (el.dom) {
+      el.dom[DOM_LINK] = null;
+      if (el.dom['__fuelevent']) {
+        el._ownerElement._stem.getEventHandler().removeEvents(el.dom);
+      }
+      el.dom = null;
+    }
+    if (el._subscriptions) {
+      el._subscriptions.forEach(s => s.unsubscribe());
+    }
+  },
+
+  attachFuelElementToNode(node: FuelDOMNode, fuelElement: FuelElement) {
+    node[DOM_LINK] = fuelElement;
+  },
+
+  detachFuelElementFromNode(node: FuelDOMNode) {
+    node[DOM_LINK] = null;
+  },
+
+  getFuelElementFromNode(el: FuelDOMNode): FuelElement {
+    if (el[DOM_LINK]) {
+      return el[DOM_LINK];
+    }
+    return null;
+  },
+
   isFuelElement(fuelElement: any): fuelElement is FuelElement {
     return fuelElement && fuelElement[FUEL_ELEMENT_MARK] === Bytes.FUEL_ELEMENT_MARK;
   },
@@ -116,18 +147,6 @@ export const FuelElementView = {
 
   getComponentRenderedTree(fuelElement: FuelElement): FuelElement {
     return fuelElement._componentRenderedElementTreeCache;
-  },
-
-  getProps({props, children}: FuelElement, isInsertChildren = false): Object {
-    const attrs = {};
-    for (let i = 0, len = props.length; i < len; i++) {
-      const {name, value} = props[i];
-      attrs[name] = value;
-    }
-    if (isInsertChildren) {
-      attrs['children'] = children.length? children: null;
-    }
-    return attrs;
   },
 
   invokeDidMount(el: FuelElement): void {
@@ -157,8 +176,8 @@ export const FuelElementView = {
 
   instantiateComponent(context: any, fuelElement: FactoryFuelElement, oldElement?: FuelElement): [FuelElement, any] {
     const {props} = fuelElement
-    const attrs = FuelElementView.getProps(fuelElement, true);
-    const oldAttrs = oldElement? FuelElementView.getProps(oldElement): null;
+    const attrs = fuelElement.props;
+    const oldAttrs = oldElement? oldElement.props: null;
     if (FuelElementView.isStatelessComponent(fuelElement)) {
       return [fuelElement.type(attrs, context), context];
     }
@@ -206,6 +225,7 @@ export const FuelElementView = {
       // If rendered component was FuelComponent,
       // _componentInstance must not to be setted.
       if (rendered) {
+        rendered._ownerElement = fuelElement;
         if (!FuelElementView.isComponent(rendered)) {
           rendered._componentInstance = instance;
         }
@@ -235,16 +255,23 @@ export const FuelElementView = {
     }
 
     const {props, type} = fuelElement
-    const attrs = [];
     const tagName = FuelElementView.tagNameOf(fuelElement);
     const dom = renderer.createElement(tagName);
+
+    // This make circular references between DOMElement and FuelElement,
+    // but all disposable FuelElement will cleanup at stem and all references will be cut off.
+    // So, this circular ref does'nt make leaks.
+    dom[DOM_LINK] = fuelElement;
 
     fuelElement.dom = dom as any;
 
     let isScoped = false;
 
-    for (let i = 0, len = props.length; i < len; i++) {
-      let {name, value} = props[i];
+    for (let name in props) {
+      if (name === 'children') {
+        continue;
+      }
+      const value = props[name];
       if (DOMEvents[name]) {
         FuelElementView.addEvent(rootElement, fuelElement, name, value);
         continue;
@@ -279,6 +306,7 @@ export const FuelElementView = {
       invariant(!DOMAttributes[name] && name.indexOf('data-') === -1, `${name} is not a valid dom attributes.`);
       dom[name] = value;
     }
+
     return dom;
   }
 }
@@ -344,7 +372,7 @@ function makeStem(fuelElement: FuelElement, name: string, value: any, createStem
 }
 
 
-export function makeFuelElement(type: FuelComponentType, key: string|number = null, props: Property[], children: FuelElement[] = []): FuelElement {
+export function makeFuelElement(type: FuelComponentType, key: string|number = null, props: KeyMap<any>, children: FuelElement[] = []): FuelElement {
   return {
     [FUEL_ELEMENT_MARK]                : Bytes.FUEL_ELEMENT_MARK,
     type,
@@ -352,6 +380,8 @@ export function makeFuelElement(type: FuelComponentType, key: string|number = nu
     props,
     children,
     dom                                : null,
+    _ownerElement                      : null,
+    _unmounted                         : false,
     _stem                              : null,
     _componentInstance                 : null,
     _componentRenderedElementTreeCache : null,

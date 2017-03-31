@@ -177,7 +177,7 @@ describe('element', () => {
     describe('@getProps', () => {
       it('return props as object.', () => {
         const el = makeFuelElement(1, null, [{name: 'className', value: 'test-classname'}, {name: 'id', value: 'test-id'}]);
-        expect(FuelElementView.getProps(el)).to.be.deep.equal({
+        expect(el.props).to.be.deep.equal({
           className: 'test-classname',
           id: 'test-id'
         });
@@ -188,7 +188,7 @@ describe('element', () => {
         const el = makeFuelElement(divId, null, [{name: 'className', value: 'test-classname'}, {name: 'id', value: 'test-id'}], [
           makeFuelElement(divId, null, [])
         ]);
-        expect(FuelElementView.getProps(el, true)).to.be.deep.equal({
+        expect(el.props).to.be.deep.equal({
           className: 'test-classname',
           id: 'test-id',
           children: [

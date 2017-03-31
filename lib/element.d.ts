@@ -14,7 +14,7 @@
  * @fileoverview
  * @author Taketoshi Aono
  */
-import { FuelElement, BuiltinFuelElement, StatelessFuelElement, ComponentFuelElement, FactoryFuelElement, Property, FuelComponentType, Stem } from './type';
+import { FuelElement, BuiltinFuelElement, StatelessFuelElement, ComponentFuelElement, FactoryFuelElement, FuelDOMNode, FuelComponentType, Stem, KeyMap } from './type';
 import { Renderer } from './renderer/renderer';
 export declare const INSTANCE_ELEMENT_SYM: any;
 export declare const FuelElementView: {
@@ -25,11 +25,14 @@ export declare const FuelElementView: {
     isComponentClass(fuelElement: FuelElement): fuelElement is ComponentFuelElement;
     tagNameOf(fuelElement: FuelElement): string;
     hasChildren(el: FuelElement): boolean;
+    cleanupElement(el: FuelElement): void;
+    attachFuelElementToNode(node: FuelDOMNode, fuelElement: FuelElement): void;
+    detachFuelElementFromNode(node: FuelDOMNode): void;
+    getFuelElementFromNode(el: FuelDOMNode): FuelElement;
     isFuelElement(fuelElement: any): fuelElement is FuelElement;
     isTextNode(fuelElement: FuelElement): fuelElement is BuiltinFuelElement;
     getTextValueOf(fuelElement: FuelElement): string;
     getComponentRenderedTree(fuelElement: FuelElement): FuelElement;
-    getProps({props, children}: FuelElement, isInsertChildren?: boolean): Object;
     invokeDidMount(el: FuelElement): void;
     invokeDidUpdate(el: FuelElement): void;
     invokeWillUnmount(el: FuelElement): void;
@@ -39,4 +42,4 @@ export declare const FuelElementView: {
     createDomElement(rootElement: FuelElement, fuelElement: FuelElement, renderer: Renderer, createStem: () => Stem): any;
 };
 export declare function cloneElement(fuelElement: FuelElement, props?: any, children?: FuelElement[]): FuelElement;
-export declare function makeFuelElement(type: FuelComponentType, key: string | number, props: Property[], children?: FuelElement[]): FuelElement;
+export declare function makeFuelElement(type: FuelComponentType, key: string | number, props: KeyMap<any>, children?: FuelElement[]): FuelElement;

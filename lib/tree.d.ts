@@ -16,4 +16,5 @@
  */
 import { FuelElement, Stem, FuelDOMNode } from './type';
 import { Renderer } from './renderer/renderer';
-export declare function fastCreateDomTree(context: any, rootElement: FuelElement, fuelElement: FuelElement, renderer: Renderer, createStem: () => Stem): FuelDOMNode;
+export declare function fastCreateDomTree(context: any, fuelElement: FuelElement, renderer: Renderer, createStem: () => Stem): FuelDOMNode;
+export declare function cleanupTree(fuelElement: FuelElement, cb?: () => void): void;
