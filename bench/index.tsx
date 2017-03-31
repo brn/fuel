@@ -16,7 +16,7 @@
  */
 
 
-import benchmark from 'vdom-benchmark-base';
+import benchmark = require('vdom-benchmark-base');
 import {
   Fuel,
   React,
