@@ -1176,19 +1176,32 @@ function makeInitialStackState(context, newElement, oldElement) {
         }
     ];
 }
-function createNextStackState(context, prev, oldElement) {
+function createNextStackState(context, parentState, prev, oldElement) {
     var newChild = prev.newChildren.shift();
     var oldChild;
     var isKeyedItem = false;
-    if (oldElement && oldElement._keymap && newChild && oldElement._keymap[newChild.key]) {
-        oldChild = oldElement._keymap[newChild.key];
-        if (!newChild._keymap) {
-            newChild._keymap = {};
+    if (parentState) {
+        var parentNewElement = parentState.newElement, parentOldElement = parentState.oldElement;
+        if (parentOldElement && parentOldElement._keymap && newChild && parentOldElement._keymap[newChild.key]) {
+            oldChild = parentOldElement._keymap[newChild.key];
+            if (parentNewElement && !parentNewElement._keymap) {
+                parentNewElement._keymap = {};
+                parentNewElement._keymap[newChild.key] = newChild;
+            }
+            var index = prev.oldChildren.indexOf(oldChild);
+            if (index !== -1) {
+                prev.oldChildren.splice(index, 1);
+                isKeyedItem = true;
+            }
+            else {
+                oldChild = prev.oldChildren.shift();
+                isKeyedItem = false;
+            }
         }
-        newChild._keymap[newChild.key] = newChild;
-        var index = prev.oldChildren.indexOf(oldChild);
-        prev.oldChildren.splice(index, 1);
-        isKeyedItem = true;
+        else {
+            oldChild = prev.oldChildren.shift();
+            isKeyedItem = false;
+        }
     }
     else {
         oldChild = prev.oldChildren.shift();
@@ -1381,9 +1394,9 @@ var FuelStem = (function () {
                 (!next.difference ||
                     next.difference.flags === 0 ||
                     next.difference.flags === 8 /* REPLACE_ELEMENT */)) {
-                parent = next;
                 stack.push(next);
-                stack.push(createNextStackState(context_2, next, oldElement));
+                stack.push(createNextStackState(context_2, parent, next, oldElement));
+                parent = next;
             }
         }
         var _a;
