@@ -30,7 +30,8 @@ import {
   setStyle
 } from './node';
 import {
-  fastCreateDomTree
+  fastCreateDomTree,
+  cleanupTree
 } from './tree';
 import {
   FuelElementView
@@ -87,7 +88,7 @@ function replaceElement(root: FuelElement, parent: FuelElement, oldElement: Fuel
   const parentDom = parent.dom;
   if (!isKeyedItems) {
     parentDom.replaceChild(newDom, oldDom);
-    clean(root, oldElement);
+    cleanupTree(root, oldElement);
   } else {
     parentDom.removeChild(oldDom);
     parentDom.appendChild(newDom);
@@ -151,44 +152,6 @@ interface Batch {
 }
 
 
-function clean(rootElement: FuelElement, fuelElement: FuelElement) {
-  requestIdleCallback(() => doClean(rootElement, fuelElement));
-}
-
-
-function doClean(rootElement: FuelElement, fuelElement: FuelElement) {
-  const stack = [
-    {
-      element: fuelElement,
-      children: fuelElement.children.slice(),
-      dom: fuelElement.dom,
-      stem: rootElement._stem
-    }
-  ];
-
-  while (stack.length) {
-    const next = stack.pop();
-    if (next.dom) {
-      if (next.dom['__fuelevent']) {
-        next.stem.getEventHandler().removeEvents(next.dom);
-      }
-      if (next.element._subscriptions) {
-        next.element._subscriptions.forEach(s => s.unsubscribe());
-      }
-      next.dom = null;
-    }
-    if (next.children.length) {
-      const child = next.children.shift();
-      const revealed = FuelElementView.stripComponent(child);
-      stack.push(next);
-      if (revealed) {
-        stack.push({element: child, children: child.children.slice(), dom: revealed.dom, stem: child._stem? child._stem: next.stem});
-      }
-    }
-  }
-}
-
-
 function update({parent, newElement, oldElement, isKeyedItem, difference, root, context}: Batch) {
   const {renderer} = FuelStem;
   if (isNewElement(difference)) {
@@ -201,14 +164,14 @@ function update({parent, newElement, oldElement, isKeyedItem, difference, root, 
         parent.dom.appendChild(tree);
         FuelElementView.invokeDidMount(newElement);
         FuelElementView.invokeWillUnmount(oldElement);
-        clean(root, oldElement);
+        cleanupTree(root, oldElement);
       }
     }
   } else if (isRemoveElement(difference)) {
     FuelElementView.invokeWillUnmount(oldElement);
     oldElement.dom.parentNode.removeChild(oldElement.dom);
     oldElement._stem = null;
-    clean(root, oldElement);
+    cleanupTree(root, oldElement);
   } else if (isReplaceElement(difference)) {
     FuelElementView.invokeWillUnmount(oldElement);
     replaceElement(root, parent, oldElement, newElement, isKeyedItem, renderer);
@@ -266,8 +229,16 @@ function createNextStackState(context:any, prev: PatchStackType, oldElement: Fue
   }
 
   let root = prev.root;
-  if (newChild && newChild._stem) {
-    root = newChild;
+  if (newChild) {
+    if (newChild._unmounted) {
+      newChild = null;
+    } else if (newChild._stem) {
+      root = newChild;
+    }
+  }
+
+  if (newChild && !newChild._ownerElement) {
+    newChild._ownerElement = prev.newElement._ownerElement;
   }
 
   return {
@@ -366,6 +337,17 @@ export class FuelStem implements Stem {
     });
   }
 
+  public unmountComponent(fuelElement: FuelElement) {
+    let owner: FuelElement;
+    if (!fuelElement._ownerElement && FuelElementView.isComponent(fuelElement)) {
+      owner = fuelElement;
+    } else if (fuelElement._ownerElement && FuelElementView.isComponent(fuelElement._ownerElement)) {
+      owner = fuelElement._ownerElement;
+    } else {
+      invariant(true, "Not mounted component isn't able to unmount");
+    }
+    cleanupTree(fuelElement, fuelElement);
+  }
 
   public render(el: FuelElement, callback: (el: Node) => void = (el => {}), context: any = {}, updateOwnwer = true) {
     if (!this._enabled) {

@@ -203,6 +203,14 @@ export class Fuel {
   }
 
 
+  public static unmountComponentAtNode(el: Node) {
+    const fuelElement = FuelElementView.getFuelElementFromNode(el as any);
+    if (fuelElement) {
+      fuelElement._stem.unmountComponent(fuelElement);
+    }
+  }
+
+
   /**
    * Base class of FuelComponent.
    */
@@ -213,7 +221,7 @@ export class Fuel {
 
   public static isValidElement = (el: any) => el? FuelElementView.isFuelElement(el): false
 
-  public static cloneElement = cloneElement
+  public static cloneElement: (fuelElement: PublicFuelElement, props?: any, children?: PublicFuelElement[]) => PublicFuelElement = cloneElement
 
   public static createFactory = (tag: string) => () => Fuel.createElement(tag, {})
 

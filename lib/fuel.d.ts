@@ -15,7 +15,6 @@
  * @author Taketoshi Aono
  */
 import { PublicFuelElement, FuelElement, FuelComponent, StatelessComponent, FuelComponentStatic, FuelNode, ReactCompatiblePropsTypes, HTMLAttributes } from './type';
-import { cloneElement } from './element';
 export declare class ComponentImpl<Props, State> implements FuelComponent<Props, State> {
     private _props;
     private _context;
@@ -61,13 +60,14 @@ export declare class Fuel {
     static createElement<P extends {
         key?: string;
     }>(type: StatelessComponent<P>, props: P, ...children: FuelNode[]): FuelElement;
+    static unmountComponentAtNode(el: Node): void;
     /**
      * Base class of FuelComponent.
      */
     static Component: typeof ComponentImpl;
     static PureComponent: typeof PureComponentImpl;
     static isValidElement: (el: any) => boolean;
-    static cloneElement: typeof cloneElement;
+    static cloneElement: (fuelElement: PublicFuelElement, props?: any, children?: PublicFuelElement[]) => PublicFuelElement;
     static createFactory: (tag: string) => () => FuelElement;
     static Children: {
         map<T>(children: PublicFuelElement[], cb: (el: PublicFuelElement) => T): T[];

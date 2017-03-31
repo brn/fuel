@@ -58,6 +58,7 @@ import {
 
 
 const FUEL_ELEMENT_MARK = Symbol('__fuel_element');
+const DOM_LINK = Symbol('__fuel_element_link');
 const TAG_NAMES = {map: {}, count: 1};
 const SYNTHETIC_TEXT = 'SYNTHETIC_TEXT';
 const PROTOTYPE = 'prototype';
@@ -100,6 +101,27 @@ export const FuelElementView = {
 
   hasChildren(el: FuelElement): boolean {
     return el.children.length > 0;
+  },
+
+  cleanupElement(el: FuelElement) {
+    el = FuelElementView.stripComponent(el);
+    if (el.dom) {
+      el.dom[DOM_LINK] = null;
+      if (el.dom['__fuelevent']) {
+        el._ownerElement._stem.getEventHandler().removeEvents(el.dom);
+      }
+      el.dom = null;
+    }
+    if (el._subscriptions) {
+      el._subscriptions.forEach(s => s.unsubscribe());
+    }
+  },
+
+  getFuelElementFromNode(el: FuelDOMNode): FuelElement {
+    if (!el[DOM_LINK]) {
+      return el[DOM_LINK];
+    }
+    return null;
   },
 
   isFuelElement(fuelElement: any): fuelElement is FuelElement {
@@ -206,6 +228,7 @@ export const FuelElementView = {
       // If rendered component was FuelComponent,
       // _componentInstance must not to be setted.
       if (rendered) {
+        rendered._ownerElement = fuelElement;
         if (!FuelElementView.isComponent(rendered)) {
           rendered._componentInstance = instance;
         }
@@ -279,6 +302,11 @@ export const FuelElementView = {
       invariant(!DOMAttributes[name] && name.indexOf('data-') === -1, `${name} is not a valid dom attributes.`);
       dom[name] = value;
     }
+
+    // This make circular references between DOMElement and FuelElement,
+    // but all disposable FuelElement will cleanup at stem and all references will be cut off.
+    // So, this circular ref does'nt make leaks.
+    dom[DOM_LINK] = fuelElement;
     return dom;
   }
 }
@@ -352,6 +380,8 @@ export function makeFuelElement(type: FuelComponentType, key: string|number = nu
     props,
     children,
     dom                                : null,
+    _ownerElement                      : null,
+    _unmounted                         : false,
     _stem                              : null,
     _componentInstance                 : null,
     _componentRenderedElementTreeCache : null,

@@ -29,7 +29,8 @@ import {
   Renderer
 } from './renderer/renderer';
 import {
-  invariant
+  invariant,
+  requestIdleCallback
 } from './util'
 
 
@@ -118,10 +119,14 @@ export function fastCreateDomTree(
       let {context} = next;
       while (FuelElementView.isComponent(child)) {
         root = child;
+        child._ownerElement = next.element._ownerElement;
         [child, context] = renderComponent(context, child, createStem);
         if (!child) {
           continue LOOP;
         }
+      }
+      if (!child._ownerElement) {
+        child._ownerElement = next.element._ownerElement;
       }
       stack.push({element: child, children: child.children.slice(), dom: null, parent: next.dom, parentElement: next.element, root, context});
     }
@@ -136,4 +141,31 @@ function renderComponent(oldContext: any, fuelElement: FuelElement, createStem: 
     fuelElement._stem.registerOwner(fuelElement);
   }
   return [nodes, context];
+}
+
+
+export function cleanupTree(rootElement: FuelElement, fuelElement: FuelElement) {
+  requestIdleCallback(() => doClean(rootElement, fuelElement));
+}
+
+
+function doClean(rootElement: FuelElement, fuelElement: FuelElement) {
+  const stack = [
+    {
+      element: fuelElement,
+      children: fuelElement.children.slice()
+    }
+  ];
+
+  while (stack.length) {
+    const next = stack.pop();
+    FuelElementView.cleanupElement(next.element);
+    if (next.children.length) {
+      const child = next.children.shift();
+      stack.push(next);
+      if (child) {
+        stack.push({element: child, children: child.children.slice()});
+      }
+    }
+  }
 }

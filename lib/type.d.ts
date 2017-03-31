@@ -34,6 +34,7 @@ export interface Stem {
     render(el: FuelElement, callback?: (el: Node) => void, context?: any, updateOwner?: boolean): void;
     registerOwner(el: FuelElement): void;
     owner(): FuelElement;
+    unmountComponent(fuelElement: FuelElement): void;
 }
 export interface StringNodeReprensation {
     tagName: string | null;
@@ -79,6 +80,8 @@ export interface PublicFuelElement {
 }
 export interface FuelElement extends PublicFuelElement {
     dom: FuelDOMNode;
+    _unmounted: boolean;
+    _ownerElement: FuelElement;
     _stem?: Stem;
     _componentInstance?: FuelComponent<any, any>;
     _componentRenderedElementTreeCache?: FuelElement;
