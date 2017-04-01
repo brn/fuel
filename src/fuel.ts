@@ -27,7 +27,8 @@ import {
   FuelComponentStatic,
   FuelNode,
   ReactCompatiblePropsTypes,
-  HTMLAttributes
+  HTMLAttributes,
+  KeyMap
 } from './type';
 import {
   FuelStem
@@ -179,27 +180,33 @@ export class Fuel {
       props = {} as any;
     }
 
-    if (children.length) {
-      children = checkChildren(children);
-    }
-
-    // Convert props object to array.
-    // Because for in loop is too slow and props will iterate many times.
-    let attributes: Property[] = [];
-    for (const name in props) {
-      if (name !== 'key') {
-        const value = props[name];
-        attributes.push({name, value});
+    const attrs: KeyMap<any> = {};
+    for (const key in props) {
+      if (key !== 'key') {
+        attrs[key] = props[key];
       }
     }
 
-    const el = makeFuelElement(typeof type === 'string'? FuelElementView.allocateTagName(type): type, props.key, attributes, children);
+    attrs.children = checkChildren(children);
+
+    const el = makeFuelElement(typeof type === 'string'? FuelElementView.allocateTagName(type): type, props.key, attrs, attrs.children);
 
     // If element is component, We set stem to this FuelElement.
     if (FuelElementView.isComponent(el) || props.scoped) {
       el._stem = new FuelStem();
     }
     return el;
+  }
+
+
+  public static unmountComponentAtNode(el: Node) {
+    const fuelElement = FuelElementView.getFuelElementFromNode(el as any);
+    if (fuelElement) {
+      fuelElement._stem.unmountComponent(fuelElement, () => {
+        el['innerHTML'] = '';
+      });
+      FuelElementView.detachFuelElementFromNode(el as any);
+    }
   }
 
 
@@ -213,7 +220,7 @@ export class Fuel {
 
   public static isValidElement = (el: any) => el? FuelElementView.isFuelElement(el): false
 
-  public static cloneElement = cloneElement
+  public static cloneElement: (fuelElement: PublicFuelElement, props?: any, children?: PublicFuelElement[]) => PublicFuelElement = cloneElement
 
   public static createFactory = (tag: string) => () => Fuel.createElement(tag, {})
 

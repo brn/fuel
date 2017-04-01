@@ -29,7 +29,8 @@ import {
   Renderer
 } from './renderer/renderer';
 import {
-  invariant
+  invariant,
+  requestIdleCallback
 } from './util'
 
 
@@ -41,10 +42,11 @@ type FastDomTreeStackType = {
   parent: FuelDOMNode,
   root: FuelElement,
   context: any;
+  childrenIndex: number
 };
 
 
-function makeInitialDomTreeStack(context: any, rootElement: FuelElement, fuelElement: FuelElement): FastDomTreeStackType[] {
+function makeInitialDomTreeStack(context: any, fuelElement: FuelElement): FastDomTreeStackType[] {
   return [
     {
       element: fuelElement,
@@ -52,8 +54,9 @@ function makeInitialDomTreeStack(context: any, rootElement: FuelElement, fuelEle
       children: fuelElement.children.slice(),
       dom: fuelElement.dom,
       parent: null,
-      root: rootElement,
-      context
+      root: fuelElement._ownerElement,
+      context,
+      childrenIndex: 0
     }
   ]
 }
@@ -61,7 +64,6 @@ function makeInitialDomTreeStack(context: any, rootElement: FuelElement, fuelEle
 
 export function fastCreateDomTree(
   context: any,
-  rootElement: FuelElement,
   fuelElement: FuelElement,
   renderer: Renderer,
   createStem: () => Stem) {
@@ -75,12 +77,12 @@ export function fastCreateDomTree(
     return;
   }
 
-  const stack = makeInitialDomTreeStack(context || {}, rootElement, fuelElement);
+  const stack = makeInitialDomTreeStack(context || {}, fuelElement);
 
 
   LOOP: while (stack.length) {
     const next = stack.pop();
-    const hasChildren = !!next.children.length;
+    const hasChildren = next.children.length > next.childrenIndex;
 
     if (!next.dom) {
 
@@ -109,7 +111,7 @@ export function fastCreateDomTree(
     let root = next.root;
     if (hasChildren) {
       stack.push(next);
-      let child = next.children.shift();
+      let child = next.children[next.childrenIndex++];
 
       if (child._stem) {
         root = child;
@@ -118,12 +120,16 @@ export function fastCreateDomTree(
       let {context} = next;
       while (FuelElementView.isComponent(child)) {
         root = child;
+        child._ownerElement = next.element._ownerElement;
         [child, context] = renderComponent(context, child, createStem);
         if (!child) {
           continue LOOP;
         }
       }
-      stack.push({element: child, children: child.children.slice(), dom: null, parent: next.dom, parentElement: next.element, root, context});
+      if (!child._ownerElement) {
+        child._ownerElement = next.element._ownerElement;
+      }
+      stack.push({element: child, children: child.children, dom: null, parent: next.dom, parentElement: next.element, root, context, childrenIndex: 0});
     }
   }
   return createdDomTreeRoot;
@@ -136,4 +142,35 @@ function renderComponent(oldContext: any, fuelElement: FuelElement, createStem: 
     fuelElement._stem.registerOwner(fuelElement);
   }
   return [nodes, context];
+}
+
+
+export function cleanupTree(fuelElement: FuelElement, cb?: () => void) {
+  doClean(fuelElement, cb);
+//  requestIdleCallback(() => doClean(fuelElement, cb));
+}
+
+
+function doClean(fuelElement: FuelElement, cb?: () => void) {
+  const stack = [
+    {
+      element: fuelElement,
+      children: fuelElement.children.slice()
+    }
+  ];
+
+  while (stack.length) {
+    const next = stack.pop();
+    if (!next.element._unmounted) {
+      FuelElementView.cleanupElement(next.element);
+    }
+    if (next.children.length) {
+      stack.push(next);
+      const child = next.children.shift();
+      if (child) {
+        stack.push({element: child, children: child.children.slice()});
+      }
+    }
+  }
+  cb && cb();
 }

@@ -24,13 +24,18 @@ import {
 } from '../type';
 
 
+const DOM_NODE_CACHE = {};
+
 export class DomRenderer implements Renderer {
   private id: number = 0;
 
   public updateId() {this.id++}
 
   public createElement(tagName: string): FuelDOMNode {
-    const ret = document.createElement(tagName) as any;
+    if (DOM_NODE_CACHE[tagName]) {
+      return DOM_NODE_CACHE[tagName].cloneNode(false);
+    }
+    const ret = DOM_NODE_CACHE[tagName] =  document.createElement(tagName) as any;
     ret.setAttribute('data-id', `${this.id}`);
     return ret;
   }

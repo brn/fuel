@@ -94,7 +94,7 @@ describe('tree', () => {
           </ul>
         </div>
       );
-      fastCreateDomTree({}, el, el, renderer, () => new FuelStem());
+      fastCreateDomTree({}, el, renderer, () => new FuelStem());
       expect(el.dom.toString()).to.be.eq('<div><ul><li><span>text</span></li><li><span>text2</span></li><li><span><a href="javascript:void(0)">text3</a></span></li><li><table><thead><tr><th>header1</th><th>header2</th><th>header3</th></tr></thead><tbody><tr><td>body1</td><td>body2</td><td>boy3</td></tr></tbody></table></li></ul></div>');
     });
 
@@ -111,7 +111,7 @@ describe('tree', () => {
           </ul>
         </div>
       );
-      fastCreateDomTree({}, el, el, renderer, () => new FuelStem());
+      fastCreateDomTree({}, el, renderer, () => new FuelStem());
       expect(el.dom.toString()).to.be.eq('<div><ul><li><span>text</span></li><li><span>text2</span></li><li><span><a href="javascript:void(0)">text3</a></span></li><li><table><thead><tr><th>header1</th><th>header2</th><th>header3</th></tr></thead><tbody><tr><td>body1</td><td>body2</td><td>boy3</td></tr></tbody></table></li></ul></div>');
     });
 
@@ -128,7 +128,7 @@ describe('tree', () => {
           </ul>
         </div>
       );
-      fastCreateDomTree({}, el, el, renderer, () => new FuelStem());
+      fastCreateDomTree({}, el, renderer, () => new FuelStem());
       expect(el.dom.toString()).to.be.eq('<div><ul><li><span>text</span></li><li><span>text2</span></li><li><span><a href="javascript:void(0)">text3</a></span></li><li><table><thead><tr><th>header1</th><th>header2</th><th>header3</th></tr></thead><tbody><tr><td>body1</td><td>body2</td><td>boy3</td></tr></tbody></table></li></ul></div>');
     });
 
@@ -145,7 +145,7 @@ describe('tree', () => {
           </ul>
         </div>
       );
-      fastCreateDomTree({}, el, el, renderer, () => new FuelStem());
+      fastCreateDomTree({}, el, renderer, () => new FuelStem());
       expect(el.dom.toString()).to.be.eq('<div><ul><li><span>text</span></li><li><span>text2</span></li><li><span><a href="javascript:void(0)">text3</a></span></li><li><div><table><thead><tr><th>header1</th><th>header2</th><th>header3</th></tr></thead><tbody><tr><td>body1</td><td>body2</td><td>boy3</td></tr></tbody></table></div></li></ul></div>');
     });
 
@@ -159,7 +159,7 @@ describe('tree', () => {
 
     it('create dom tree contains children', () => {
       const el = <div><ChildrenComponent><span>foo-bar-baz</span></ChildrenComponent></div>;
-      fastCreateDomTree({}, el, el, renderer, () => new FuelStem());
+      fastCreateDomTree({}, el, renderer, () => new FuelStem());
       expect(el.dom.toString()).to.be.eq('<div><div><span>foo-bar-baz</span></div></div>');
     });
 
@@ -186,7 +186,7 @@ describe('tree', () => {
 
     it('create context.', () => {
       const el = <div><ContextComponent><div><ChildComponent/></div></ContextComponent></div>;
-      fastCreateDomTree({}, el, el, renderer, () => new FuelStem());
+      fastCreateDomTree({}, el, renderer, () => new FuelStem());
       expect(el.dom.toString()).to.be.eq('<div><div><div><span class="context-class-name"></span></div></div></div>');
     });
   });

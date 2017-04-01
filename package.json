@@ -5,6 +5,8 @@
   "main": "dist/index.bundle.js",
   "scripts": {
     "release": "gulp release",
+    "bench": "gulp bench && gulp serve",
+    "bench-debug": "gulp bench-debug && gulp serve",
     "minify": "gulp",
     "ut": "gulp test-chrome",
     "ut+ct": "gulp test-all",
@@ -52,6 +54,7 @@
     "tsify": "^3.0.1",
     "tslib": "^1.6.0",
     "typescript": "^2.2.1",
+    "vdom-benchmark-base": "^0.2.4",
     "vinyl-buffer": "^1.0.0",
     "vinyl-source-stream": "^1.1.0"
   }

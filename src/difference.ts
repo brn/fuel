@@ -147,8 +147,7 @@ function compareStyle(prev: KeyMap<any>, next: KeyMap<any>): [KeyMap<string>, nu
 }
 
 
-function checkProps(bufferSet: KeyMap<PropsDiff>, prop: Property, isOldProps: boolean) {
-  const {name, value} = prop;
+function checkProps(bufferSet: KeyMap<PropsDiff>, name: string, value: any, isOldProps: boolean) {
   if (!bufferSet[name]) {
     bufferSet[name] = {state: isOldProps? AttrState.REMOVED: AttrState.NEW, value};
   } else if (name === 'style') {
@@ -186,15 +185,22 @@ export function diff(oldElement: FuelElement, newElement: FuelElement): Differen
   } else if (oldElement.type !== newElement.type) {
     result.flags |= DifferenceBits.REPLACE_ELEMENT;
   } else {
-    const newPropsLength = newProps.length;
-    const oldPropsLength = oldProps.length;
+    const newPropsKeys = Object.keys(newProps);
+    const oldPropsKeys = Object.keys(oldProps);
+    const newPropsLength = newPropsKeys.length;
+    const oldPropsLength = oldPropsKeys.length;
+    const keys = oldPropsLength > newPropsLength? oldPropsKeys: newPropsKeys;
 
     for (let i = 0, len = oldPropsLength > newPropsLength? oldPropsLength: newPropsLength; i < len; i++) {
-      if (oldProps[i] !== undefined) {
-        checkProps(bufferSet, oldProps[i], true);
+      const key = keys[i];
+      if (key === 'children') {
+        continue;
       }
-      if (newProps[i] !== undefined) {
-        checkProps(bufferSet, newProps[i], false);
+      if (oldProps[key] !== undefined) {
+        checkProps(bufferSet, key, oldProps[key], true);
+      }
+      if (newProps[key] !== undefined) {
+        checkProps(bufferSet, key, newProps[key], false);
       }
     }
 

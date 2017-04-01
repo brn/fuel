@@ -14,7 +14,7 @@
  * @fileoverview
  * @author Taketoshi Aono
  */
-import { FuelElement, SharedEventHandler, Stem } from './type';
+import { FuelElement, FuelDOMNode, SharedEventHandler, Stem } from './type';
 import { Renderer } from './renderer/renderer';
 export declare class FuelStem implements Stem {
     private tree;
@@ -23,6 +23,8 @@ export declare class FuelStem implements Stem {
     private batchs;
     private batchCallback;
     private sharedEventHandler;
+    private lock;
+    private renderQueue;
     constructor(tree?: FuelElement);
     enterUnsafeUpdateZone(cb: () => void): void;
     registerOwner(owner: FuelElement): void;
@@ -30,7 +32,9 @@ export declare class FuelStem implements Stem {
     setEventHandler(handler: SharedEventHandler): void;
     getEventHandler(): SharedEventHandler;
     private renderAtAnimationFrame();
-    render(el: FuelElement, callback?: (el: Node) => void, context?: any, updateOwnwer?: boolean): void;
+    private drainRenderQueue();
+    unmountComponent(fuelElement: FuelElement, cb: () => void): void;
+    render(el: FuelElement, callback?: (el: FuelDOMNode) => void, context?: any, updateOwnwer?: boolean): void;
     private attach(el, updateOwner);
     private patch(newTree, context);
 }

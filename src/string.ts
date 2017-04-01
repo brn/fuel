@@ -38,7 +38,7 @@ export const FuelString = {
     }
     element._stem.render(element, root => {
       firstNode.appendChild(root as any);
-      cb && cb(root);
+      cb && cb(root as any);
     });
   }
 }

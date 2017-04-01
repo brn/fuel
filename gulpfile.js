@@ -1,5 +1,17 @@
 /**
- * @fileoverview
+ * The MIT License (MIT)
+ * Copyright (c) Taketoshi Aono
+ *  
+ * Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+ *  
+ * The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+ *  
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ * @fileoverview 
  * @author Taketoshi Aono
  */
 
@@ -7,21 +19,21 @@ const _                  = require('lodash');
 const fs                 = require('fs');
 const gulp               = require('gulp');
 const path               = require('path');
-const {execSync}         = require('child_process');
+const {execSync, spawn}  = require('child_process');
 
 const DIST = 'dist';
-const BIN_DIR = path.resolve(process.cwd(), './node_modules/.bin/') + '/';
 
 
-gulp.task('stop-serve', done => {
-  try {
-    const pid = fs.readFileSync('.dev.pid', 'utf8');
-    process.kill(parseInt(pid, 10));
-    fs.unlinkSync('.dev.pid');
-  } catch(e) {
-    throw new Error('Server process does not exists!');
-  }  
+gulp.task('serve', () => {
+  const express = require('express');
+  const serveStatic = require('serve-static');
+
+  const app = express();
+  app.use(serveStatic('./'));
+
+  app.listen(9000);
 });
+
 
 function typescript(srcs = [], useSourcemaps = false) {
   const tsc = require('gulp-typescript');
@@ -42,7 +54,7 @@ function typescript(srcs = [], useSourcemaps = false) {
 
 
 /**
- * typescriptのコンパイル
+ * Compile typescript
  */
 gulp.task('typescript', () => {
   return typescript(['!src/**/__tests__/**', '!src/**/__bench__/**'])
@@ -52,7 +64,7 @@ gulp.task('typescript', () => {
 
 
 /**
- * typescriptのコンパイル
+ * Compile typescript with sourcemaps.
  */
 gulp.task('typescript-test', () => {
   const sourceMaps = require('gulp-sourcemaps');
@@ -64,7 +76,7 @@ gulp.task('typescript-test', () => {
 
 
 /**
- * javascriptのminify
+ * Minify javascript, mangle all vars and props.
  */
 gulp.task('minify', ['typescript'], done => {
   minify({file: 'lib/index.js', uglify: true, souceMaps: false, builtins: false, onEnd: done, filesize: true, isTsify: false});
@@ -72,7 +84,7 @@ gulp.task('minify', ['typescript'], done => {
 
 
 /**
- * javascriptのminify
+ * Minify javascript, without any mangles.
  */
 gulp.task('minify-debug', ['typescript'], done => {
   minify({file: 'lib/index.js', uglify: false, souceMaps: true, builtins: false, onEnd: done, filesize: false, isTsify: false});
@@ -80,9 +92,9 @@ gulp.task('minify-debug', ['typescript'], done => {
 
 
 /**
- * javascriptのminify
+ * Bundle and minify javascript.
  */
-function minify({file, uglify = false, sourceMaps = false, onEnd = null, builtins = true, filesize = false, isTsify = true}) {
+function minify({file, uglify = false, sourceMaps = false, onEnd = null, builtins = true, filesize = false, isTsify = true, dist = DIST}) {
   const browserify = require('browserify');
   const collapse   = require('bundle-collapser/plugin');
   const tsify      = require('tsify');
@@ -125,7 +137,7 @@ function minify({file, uglify = false, sourceMaps = false, onEnd = null, builtin
     .pipe(gif(sourceMaps, sourcemaps.init({loadMaps: true})))
     .pipe(gif(sourceMaps, sourcemaps.write()))
     .pipe(gif(filesize, size({enableGzip: true})))
-    .pipe(gulp.dest(`./${DIST}`))
+    .pipe(gulp.dest(`./${dist}`))
     .on('end', () => onEnd && onEnd());
 }
 
@@ -137,13 +149,17 @@ gulp.task('local-install', () => {
 
 
 /**
- * 一時ファイルの削除
+ * Remove temporary files.
  */
 gulp.task('clean', (cb) => {
   return require('del')([DIST], cb);
 });
 
 
+
+/**
+ * Bundle and compile all spec files.
+ */
 gulp.task('bundle-all-tests', (done) => {
   const async = require('async');
   async.forEachSeries(require('glob').sync('src/**/__tests__/*.spec.ts*'), (file, done) => {
@@ -152,6 +168,9 @@ gulp.task('bundle-all-tests', (done) => {
 });
 
 
+/**
+ * Bundle and compile all combine test spec files.
+ */
 gulp.task('bundle-ct', (done) => {
   const async = require('async');
   async.forEachSeries(require('glob').sync('ct/*.spec.ts*'), (file, done) => {
@@ -182,7 +201,7 @@ const runKarma = (singleRun, browser, done) => {
 
 
 /**
- * karmaの起動
+ * Run karma
  */
 gulp.task('test', ['typescript-test'], () => {
   require('glob').sync('./lib/**/__tests__/*.spec.js').forEach(c => {
@@ -192,17 +211,32 @@ gulp.task('test', ['typescript-test'], () => {
 
 
 /**
- * karmaの起動
+ * Run benchmark.
  */
-gulp.task('bench', ['typescript-test'], () => {
-  require('glob').sync('./lib/**/__bench__/*.bench.js').forEach(c => {
-    require(c);
-  });
+gulp.task('bench', () => {
+  const runSequence = require('run-sequence');
+  return runSequence(
+    'minify',
+    'local-install',
+    () => minify({file: './bench/index.tsx', dist: './bench'})
+  );
+});
+
+/**
+ * Run benchmark.
+ */
+gulp.task('bench-debug', () => {
+  const runSequence = require('run-sequence');
+  return runSequence(
+    'minify-debug',
+    'local-install',
+    () => minify({file: './bench/index.tsx', dist: './bench'})
+  );
 });
 
 
 /**
- * karmaの起動
+ * Run karma
  */
 gulp.task('run-test-chrome', runKarma.bind(null, true, 'Chrome'));
 
@@ -210,19 +244,19 @@ gulp.task('run-test-phantom', runKarma.bind(null, true, 'PhantomJS'));
 
 
 /**
- * karmaの起動
+ * Run karma
  */
 gulp.task('tdd-chrome', runKarma.bind(null, false, 'Chrome'));
 
 
 /**
- * karmaの起動・監視
+ * Run karma
  */
 gulp.task('tdd', runKarma.bind(null, false, 'PhantomJS'));
 
 
 /**
- * karmaの起動・監視
+ * Run karma
  */
 gulp.task('test-debug', runKarma.bind(null, true, 'PhantomJS_debug'));
 
@@ -259,8 +293,9 @@ gulp.task('ct-chrome', () => {
 });
 
 
-gulp.task('publish', () => {
-  execSync('npm publish', {stdio: [0,1,2]});
+gulp.task('publish', done => {
+  const proc = spawn('npm', ['publish'], { stdio: 'inherit' });
+  proc.on('end', done);
 });
 
 

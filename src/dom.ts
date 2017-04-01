@@ -24,21 +24,34 @@ import {
   FuelStem
 } from './stem';
 import {
+  FuelElementView
+} from './element';
+import {
   DomRenderer
 } from './renderer/dom-renderer';
 
 
 export const FuelDOM = {
   render(element: FuelElement, firstNode: FuelDOMNode|Node, cb: (dom: Node) => void = (dom: Node) => {}) {
+    const oldElement = FuelElementView.getFuelElementFromNode(firstNode as FuelDOMNode);
+
     if (!FuelStem.renderer) {
       FuelStem.renderer = new DomRenderer();
     }
+
+    if (oldElement) {
+      element._stem = oldElement._stem;
+    } 
+
     if (!element._stem) {
       element._stem = new FuelStem();
     }
+      if (oldElement && !oldElement.dom) debugger;
+    FuelElementView.attachFuelElementToNode(firstNode as FuelDOMNode, element);
+    element._ownerElement = element;
     element._stem.render(element, root => {
       (firstNode as HTMLElement).appendChild(root as any);
-      cb && cb(root);
+      cb && cb(root as any);
     });
   }
 }
