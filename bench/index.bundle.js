@@ -75,27 +75,8 @@ document.addEventListener('DOMContentLoaded', function (e) {
  */
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-var element_1 = _dereq_(3);
-function isCreateChildren(diff) {
-    return (diff.flags & 1 /* CREATE_CHILDREN */) === 1 /* CREATE_CHILDREN */;
-}
-exports.isCreateChildren = isCreateChildren;
-function isNewElement(diff) {
-    return (diff.flags & 2 /* NEW_ELEMENT */) === 2 /* NEW_ELEMENT */;
-}
-exports.isNewElement = isNewElement;
-function isRemoveElement(diff) {
-    return (diff.flags & 4 /* REMOVE_ELEMENT */) === 4 /* REMOVE_ELEMENT */;
-}
-exports.isRemoveElement = isRemoveElement;
-function isReplaceElement(diff) {
-    return (diff.flags & 8 /* REPLACE_ELEMENT */) === 8 /* REPLACE_ELEMENT */;
-}
-exports.isReplaceElement = isReplaceElement;
-function isTextChanged(diff) {
-    return (diff.flags & 16 /* TEXT_CHANGED */) === 16 /* TEXT_CHANGED */;
-}
-exports.isTextChanged = isTextChanged;
+var element_1 = _dereq_(4);
+var util_1 = _dereq_(18);
 function compare(valueA, valueB) {
     if (valueA === null) {
         if (valueB || valueB === undefined) {
@@ -103,7 +84,8 @@ function compare(valueA, valueB) {
         }
         return true;
     }
-    var typeA = typeof valueA;
+    var typeA = util_1.typeOf(valueA);
+    var typeB = util_1.typeOf(valueB);
     if (typeA === 'number' && !isFinite(valueA)) {
         if (isFinite(valueB)) {
             return false;
@@ -115,15 +97,61 @@ function compare(valueA, valueB) {
         }
         return true;
     }
-    if (typeA !== 'object' && typeof valueB !== 'object') {
-        return valueA === valueB;
+    if (typeA === 'date' && typeB === 'date') {
+        return valueA.toJSON() === valueB.toJSON();
     }
-    return false;
+    else if (typeA === 'regexp' && typeB === 'regexp') {
+        return valueA.toString() === valueB.toString();
+    }
+    return valueA === valueB;
 }
+exports.compare = compare;
+function isStateUpdated(prev, next) {
+    var prevType = util_1.typeOf(prev);
+    var nextType = util_1.typeOf(next);
+    if (prevType !== nextType) {
+        return false;
+    }
+    if (prevType === nextType) {
+        return true;
+    }
+    if (prevType === 'array') {
+        var len = prev.length > next.length ? prev.length : next.length;
+        for (var i = 0; i < len; i++) {
+            if (!compare(prev[i], next[i])) {
+                return false;
+            }
+        }
+        return false;
+    }
+    else if (prevType === 'object') {
+        var prevKeys = util_1.keyList(prev);
+        var nextKeys = util_1.keyList(next);
+        var prevLen = prevKeys.length;
+        var nextLen = nextKeys.length;
+        if (prevLen !== nextLen) {
+            return false;
+        }
+        var len = prevLen > nextLen ? prevLen : nextLen;
+        for (var i = 0; i < len; i++) {
+            var pv = prev[prevKeys[i]];
+            var nv = next[nextKeys[i]];
+            if (!compare(pv, nv)) {
+                return false;
+            }
+        }
+        return true;
+    }
+    return compare(prev, next);
+}
+exports.isStateUpdated = isStateUpdated;
 function compareStyle(prev, next) {
     var diff = {};
     var unchanged = {};
     var count = 0;
+    if (next === prev) {
+        return [diff, 0];
+    }
     for (var name_1 in next) {
         var value = next[name_1];
         if (!(name_1 in prev) || !compare(prev[name_1], value)) {
@@ -134,7 +162,7 @@ function compareStyle(prev, next) {
             unchanged[name_1] = 1;
         }
     }
-    var oldStyles = Object.keys(prev);
+    var oldStyles = util_1.keyList(prev);
     for (var i = 0, len = oldStyles.length; i < len; i++) {
         if (!diff[oldStyles[i]] && !unchanged[oldStyles[i]]) {
             diff[oldStyles[i]] = '';
@@ -143,91 +171,60 @@ function compareStyle(prev, next) {
     }
     return [diff, count];
 }
-function checkProps(bufferSet, name, value, isOldProps) {
-    if (!bufferSet[name]) {
-        bufferSet[name] = { state: isOldProps ? 2 /* REMOVED */ : 1 /* NEW */, value: value };
+exports.compareStyle = compareStyle;
+var stripComponent = element_1.FuelElementView.stripComponent, isTextNode = element_1.FuelElementView.isTextNode, getTextValueOf = element_1.FuelElementView.getTextValueOf;
+function diff(context, index, move, parent, oldElement, newElement, patchOps) {
+    var isOnlyOneChild = parent ? parent.children.length === 1 : false;
+    var isNewElementTextNode = isTextNode(newElement);
+    var isOldElementTextNode = isTextNode(oldElement);
+    if (move !== 0 /* NONE */) {
+        patchOps.move(index, move, oldElement);
     }
-    else if (name === 'style') {
-        var _a = compareStyle(bufferSet[name].value, value), diff_1 = _a[0], count = _a[1];
-        if (count) {
-            bufferSet[name] = { state: 3 /* REPLACED */, value: diff_1 };
+    if (oldElement === null && newElement) {
+        if (isNewElementTextNode && isOnlyOneChild) {
+            patchOps.setText(parent, newElement);
+            return 3 /* SKIP_CURRENT_FORESET */;
         }
-    }
-    else if (!compare(bufferSet[name].value, value)) {
-        bufferSet[name] = { state: 3 /* REPLACED */, value: value };
-    }
-    else {
-        bufferSet[name].state = 4 /* UNCHANGED */;
-    }
-}
-function diff(oldElement, newElement) {
-    var oldProps = oldElement ? oldElement.props : null;
-    var newProps = newElement ? newElement.props : null;
-    var result = {
-        attr: [],
-        flags: 0
-    };
-    var bufferSet = {};
-    if (!oldElement && newElement) {
-        result.flags |= 2 /* NEW_ELEMENT */;
-        return result;
-    }
-    else if (!newElement && oldElement) {
-        result.flags |= 4 /* REMOVE_ELEMENT */;
-        return result;
-    }
-    else if (element_1.FuelElementView.isTextNode(oldElement) && element_1.FuelElementView.isTextNode(newElement)) {
-        if (element_1.FuelElementView.getTextValueOf(oldElement) !== element_1.FuelElementView.getTextValueOf(newElement)) {
-            result.flags |= 16 /* TEXT_CHANGED */;
+        else if (isOnlyOneChild) {
+            patchOps.removeChildren(parent);
+            patchOps.append(context, parent, newElement);
+            return 3 /* SKIP_CURRENT_FORESET */;
         }
-        return result;
+        else {
+            patchOps.insert(index, context, parent, newElement);
+        }
+        return 2 /* SKIP_CURRENT_CHILDREN */;
+    }
+    else if (newElement === null && oldElement) {
+        patchOps.remove(index, parent, oldElement);
+        return 2 /* SKIP_CURRENT_CHILDREN */;
+    }
+    else if (isOldElementTextNode && isNewElementTextNode) {
+        if (getTextValueOf(oldElement) !== getTextValueOf(newElement)) {
+            patchOps.updateText(index, parent, newElement);
+        }
+        return 2 /* SKIP_CURRENT_CHILDREN */;
     }
     else if (oldElement.type !== newElement.type) {
-        result.flags |= 8 /* REPLACE_ELEMENT */;
+        patchOps.replace(index, parent, newElement, oldElement, context);
+        return 2 /* SKIP_CURRENT_CHILDREN */;
     }
-    else {
-        var newPropsKeys = Object.keys(newProps);
-        var oldPropsKeys = Object.keys(oldProps);
-        var newPropsLength = newPropsKeys.length;
-        var oldPropsLength = oldPropsKeys.length;
-        var keys = oldPropsLength > newPropsLength ? oldPropsKeys : newPropsKeys;
-        for (var i = 0, len = oldPropsLength > newPropsLength ? oldPropsLength : newPropsLength; i < len; i++) {
-            var key = keys[i];
-            if (key === 'children') {
-                continue;
-            }
-            if (oldProps[key] !== undefined) {
-                checkProps(bufferSet, key, oldProps[key], true);
-            }
-            if (newProps[key] !== undefined) {
-                checkProps(bufferSet, key, newProps[key], false);
-            }
-        }
-        for (var id in bufferSet) {
-            var buf = bufferSet[id];
-            switch (buf.state) {
-                case 4 /* UNCHANGED */:
-                    break;
-                default:
-                    if (buf.state === 3 /* REPLACED */) {
-                        if (id === 'style') {
-                            buf.state = 5 /* STYLE_CHANGED */;
-                        }
-                    }
-                    result.attr.push({ key: id, value: buf.value, state: buf.state });
-            }
-        }
+    else if (!isNewElementTextNode) {
+        patchOps.update(newElement, oldElement);
     }
-    var isNewElementHasChildren = element_1.FuelElementView.hasChildren(newElement);
-    var isOldElementHasChildren = element_1.FuelElementView.hasChildren(oldElement);
-    if (isNewElementHasChildren && !isOldElementHasChildren) {
-        result.flags |= 1 /* CREATE_CHILDREN */;
+    if ((newElement && newElement.children.length > 0) && (oldElement === null || oldElement.children.length === 0)) {
+        patchOps.createChildren(context, newElement);
+        return 2 /* SKIP_CURRENT_CHILDREN */;
     }
-    return result;
+    else if (newElement && newElement.children.length === 0 && oldElement && oldElement.children.length > 0) {
+        patchOps.removeChildren(newElement);
+        return 2 /* SKIP_CURRENT_CHILDREN */;
+    }
+    return 1 /* CONTINUE */;
 }
 exports.diff = diff;
 
-},{"3":3}],2:[function(_dereq_,module,exports){
+},{"18":18,"4":4}],2:[function(_dereq_,module,exports){
 /**
  * The MIT License (MIT)
  * Copyright (c) Taketoshi Aono
@@ -246,35 +243,74 @@ exports.diff = diff;
  */
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-var stem_1 = _dereq_(9);
-var element_1 = _dereq_(3);
-var dom_renderer_1 = _dereq_(8);
+var stem_1 = _dereq_(15);
+var element_1 = _dereq_(4);
+var util_1 = _dereq_(18);
+var attachFuelElementToNode = element_1.FuelElementView.attachFuelElementToNode;
 exports.FuelDOM = {
     render: function (element, firstNode, cb) {
         if (cb === void 0) { cb = function (dom) { }; }
+        var display = firstNode['style'].display;
+        firstNode['style'].display = 'none';
+        util_1.invariant(element.props.ref, 'Can\'t declare ref props outside of Component');
+        util_1.invariant(!firstNode || firstNode.nodeType !== 1, "FuelDOM.render only accept HTMLElement node. but got " + firstNode);
         var oldElement = element_1.FuelElementView.getFuelElementFromNode(firstNode);
-        if (!stem_1.FuelStem.renderer) {
-            stem_1.FuelStem.renderer = new dom_renderer_1.DomRenderer();
-        }
         if (oldElement) {
             element._stem = oldElement._stem;
         }
         if (!element._stem) {
             element._stem = new stem_1.FuelStem();
         }
-        if (oldElement && !oldElement.dom)
-            debugger;
-        element_1.FuelElementView.attachFuelElementToNode(firstNode, element);
+        attachFuelElementToNode(firstNode, element);
         element._ownerElement = element;
         element._stem.render(element, function (root) {
             firstNode.appendChild(root);
-            cb && cb(root);
+            firstNode['style'].display = display;
+            cb && cb(firstNode['firstElementChild']);
         });
     }
 };
 exports.ReactDOM = exports.FuelDOM;
 
-},{"3":3,"8":8,"9":9}],3:[function(_dereq_,module,exports){
+},{"15":15,"18":18,"4":4}],3:[function(_dereq_,module,exports){
+(function (__DEBUG__){
+/**
+ * @fileoverview
+ * @author Taketoshi Aono
+ */
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+var node_1 = _dereq_(14);
+var DOM_NODE_CACHE = {};
+var use = node_1.NodeRecycler.use;
+var _id = 0;
+exports.domOps = {
+    resetId: function () { _id = 0; },
+    updateId: function () { _id++; },
+    newElement: function (tagName) {
+        var node = use(tagName);
+        if (!node) {
+            if (!(node = DOM_NODE_CACHE[tagName])) {
+                node = DOM_NODE_CACHE[tagName] = document.createElement(tagName);
+            }
+            node = node.cloneNode(false);
+        }
+        if (__DEBUG__) {
+            node.setAttribute('data-id', "" + _id);
+        }
+        return node;
+    },
+    newTextNode: function (text) {
+        return document.createTextNode(text);
+    },
+    newFragment: function () {
+        return document.createDocumentFragment();
+    }
+};
+
+}).call(this,true)
+
+},{"14":14}],4:[function(_dereq_,module,exports){
 /**
  * The MIT License (MIT)
  * Copyright (c) Taketoshi Aono
@@ -293,59 +329,58 @@ exports.ReactDOM = exports.FuelDOM;
  */
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-var type_1 = _dereq_(11);
-var node_1 = _dereq_(7);
-var util_1 = _dereq_(12);
-var event_1 = _dereq_(4);
-var FUEL_ELEMENT_MARK = util_1.Symbol('__fuel_element');
+var type_1 = _dereq_(17);
+var node_1 = _dereq_(9);
+var util_1 = _dereq_(18);
+var event_1 = _dereq_(5);
+var domops_1 = _dereq_(3);
 var DOM_LINK = util_1.Symbol('__fuel_element_link');
-var TAG_NAMES = { map: {}, count: 1 };
 var SYNTHETIC_TEXT = 'SYNTHETIC_TEXT';
+var SYNTHETIC_FRAGMENT = 'SYNTHETIC_FRAGMENT';
 var PROTOTYPE = 'prototype';
-TAG_NAMES.map[String(TAG_NAMES.map[SYNTHETIC_TEXT] = 0)] = SYNTHETIC_TEXT;
 function isFunction(maybeFn) {
     return typeof maybeFn === 'function';
 }
 exports.INSTANCE_ELEMENT_SYM = util_1.Symbol('__fuelelement');
 exports.FuelElementView = {
-    allocateTextTagName: function () { return 0; },
-    allocateTagName: function (tagName) {
-        var id = TAG_NAMES.map[tagName.toLowerCase()];
-        if (id) {
-            return id;
-        }
-        TAG_NAMES.map[String(TAG_NAMES.map[tagName] = TAG_NAMES.count)] = tagName;
-        return TAG_NAMES.count++;
-    },
     isComponent: function (fuelElement) {
-        return typeof fuelElement.type !== 'number';
+        var bit = 8 /* STATELESS */ | 4 /* COMPONENT */;
+        return !!fuelElement && (fuelElement._flags & bit) > 0;
     },
     isStatelessComponent: function (fuelElement) {
-        return isFunction(fuelElement.type) && !isFunction(fuelElement.type[PROTOTYPE].render);
+        return !!fuelElement && (fuelElement._flags & 8 /* STATELESS */) === 8 /* STATELESS */;
     },
     isComponentClass: function (fuelElement) {
-        return isFunction(fuelElement.type) && isFunction(fuelElement.type[PROTOTYPE].render);
+        return !!fuelElement && (fuelElement._flags & 4 /* COMPONENT */) === 4 /* COMPONENT */;
+    },
+    isFragment: function (el) {
+        return !!el && (el._flags & 32 /* FRAGMENT */) === 32 /* FRAGMENT */;
     },
     tagNameOf: function (fuelElement) {
-        return TAG_NAMES.map[String(fuelElement.type)];
+        return fuelElement.type;
+    },
+    nameOf: function (fuelElement) {
+        return !isComponent(fuelElement) ? exports.FuelElementView.tagNameOf(fuelElement) :
+            fuelElement.type.name || fuelElement.type.displayName || 'Anonymouse';
     },
     hasChildren: function (el) {
         return el.children.length > 0;
     },
     cleanupElement: function (el) {
         el = exports.FuelElementView.stripComponent(el);
-        if (el.dom) {
-            el.dom[DOM_LINK] = null;
-            if (el.dom['__fuelevent']) {
+        if (!!el.dom) {
+            if (!!el.dom['__fuelevent']) {
                 el._ownerElement._stem.getEventHandler().removeEvents(el.dom);
             }
-            el.dom = null;
         }
-        if (el._subscriptions) {
+        if (!!el._subscriptions) {
             el._subscriptions.forEach(function (s) { return s.unsubscribe(); });
         }
     },
     attachFuelElementToNode: function (node, fuelElement) {
+        // This make circular references between DOMElement and FuelElement,
+        // but all disposable FuelElement will cleanup at stem and all references will be cut off.
+        // So, this circular ref does'nt make leaks.
         node[DOM_LINK] = fuelElement;
     },
     detachFuelElementFromNode: function (node) {
@@ -358,13 +393,19 @@ exports.FuelElementView = {
         return null;
     },
     isFuelElement: function (fuelElement) {
-        return fuelElement && fuelElement[FUEL_ELEMENT_MARK] === type_1.Bytes.FUEL_ELEMENT_MARK;
+        return !!fuelElement && util_1.isDefined(fuelElement._flags) && (fuelElement._flags & 1 /* FUEL_ELEMENT */) === 1 /* FUEL_ELEMENT */;
+    },
+    isDisposed: function (fuelElement) {
+        return (fuelElement._flags & 2 /* DISPOSED */) === 2 /* DISPOSED */;
+    },
+    setDisposed: function (fuelElement) {
+        fuelElement._flags |= 2 /* DISPOSED */;
     },
     isTextNode: function (fuelElement) {
-        return fuelElement.type === 0;
+        return !!fuelElement && (fuelElement._flags & 64 /* TEXT */) === 64 /* TEXT */;
     },
     getTextValueOf: function (fuelElement) {
-        return fuelElement.props[0].value;
+        return fuelElement.props.value;
     },
     getComponentRenderedTree: function (fuelElement) {
         return fuelElement._componentRenderedElementTreeCache;
@@ -385,32 +426,44 @@ exports.FuelElementView = {
         }
     },
     stripComponent: function (fuelElement) {
-        while (fuelElement && exports.FuelElementView.isComponent(fuelElement)) {
-            fuelElement = fuelElement._componentRenderedElementTreeCache;
+        var instance;
+        var result = fuelElement;
+        while (isComponent(result)) {
+            result = result._componentRenderedElementTreeCache;
         }
-        return fuelElement;
+        return result;
     },
-    instantiateComponent: function (context, fuelElement, oldElement) {
+    initFuelElementBits: function (type) {
+        var isFn = isFunction(type);
+        return 1 /* FUEL_ELEMENT */ |
+            (isFn && isFunction(type['prototype'].render) ? 4 /* COMPONENT */ : isFn ? 8 /* STATELESS */ : type === FRAGMENT_NAME ? 32 /* FRAGMENT */ : type === TEXT_NAME ? 64 /* TEXT */ : 16 /* TAG */);
+    },
+    instantiateComponent: function (context, fuelElement, createStem) {
         var props = fuelElement.props;
         var attrs = fuelElement.props;
-        var oldAttrs = oldElement ? oldElement.props : null;
         if (exports.FuelElementView.isStatelessComponent(fuelElement)) {
             return [fuelElement.type(attrs, context), context];
         }
         if (exports.FuelElementView.isComponentClass(fuelElement)) {
             var instance_1 = fuelElement._componentInstance;
             var callReceiveHook = !!instance_1;
+            var oldAttrs = void 0;
             if (!instance_1) {
+                // If element is component, We set stem to this FuelElement.
+                fuelElement._stem = createStem();
                 instance_1 = fuelElement._componentInstance = new fuelElement.type(attrs, context);
+                oldAttrs = {};
             }
             else {
                 if (instance_1._context) {
                     instance_1._context = context;
                 }
+                oldAttrs = instance_1._props;
             }
             instance_1[exports.INSTANCE_ELEMENT_SYM] = fuelElement;
             var newContext = util_1.merge(context, instance_1.getChildContext());
-            if (fuelElement._componentRenderedElementTreeCache && !instance_1.shouldComponentUpdate(attrs, oldAttrs)) {
+            if (instance_1 && fuelElement._componentRenderedElementTreeCache &&
+                ((!util_1.keyList(oldAttrs).length && !util_1.keyList(attrs).length && !instance_1._state) || !instance_1.shouldComponentUpdate(attrs, oldAttrs))) {
                 if (callReceiveHook) {
                     fuelElement._stem.enterUnsafeUpdateZone(function () {
                         instance_1.componentWillReceiveProps(attrs);
@@ -455,21 +508,54 @@ exports.FuelElementView = {
         var root = exports.FuelElementView.stripComponent(rootElement);
         handler.addEvent(root.dom, fuelElement.dom, type, eventHandler);
     },
-    createDomElement: function (rootElement, fuelElement, renderer, createStem) {
-        if (fuelElement.type === 0) {
-            return fuelElement.dom = renderer.createTextNode(exports.FuelElementView.getTextValueOf(fuelElement));
+    toStringTree: function (el, enableChecksum) {
+        var value;
+        var context = {};
+        if (isTextNode(el)) {
+            return getTextValueOf(el);
+        }
+        else {
+            while (isComponent(el)) {
+                _a = exports.FuelElementView.instantiateComponent(context, el, function () { return ({}); }), value = _a[0], context = _a[1];
+            }
+            if (!value) {
+                return '';
+            }
+        }
+        var attrs = [];
+        for (var key in this) {
+            var value_1 = this[key];
+            if (value_1 !== null) {
+                if (type_1.CONVERSATION_TABLE[key]) {
+                    key = type_1.CONVERSATION_TABLE[key];
+                }
+                attrs.push(key + "=\"" + value_1 + "\"");
+            }
+        }
+        if (enableChecksum) {
+            attrs.unshift("data-fuelchecksum=" + el._flags);
+        }
+        return "<" + value.type + (attrs.length ? (' ' + attrs.join(' ')) : '') + ">" + el.children.map(function (child) { return exports.FuelElementView.toStringTree(child, enableChecksum); }).join('') + "</" + value.type + ">";
+        var _a;
+    },
+    createDomElement: function (rootElement, fuelElement, createStem) {
+        if (!!fuelElement.dom) {
+            return fuelElement.dom;
+        }
+        else if (isTextNode(fuelElement)) {
+            return fuelElement.dom = domops_1.domOps.newTextNode(getTextValueOf(fuelElement));
+        }
+        else if (isFragment(fuelElement)) {
+            return fuelElement.dom = domops_1.domOps.newFragment();
         }
         var props = fuelElement.props, type = fuelElement.type;
         var tagName = exports.FuelElementView.tagNameOf(fuelElement);
-        var dom = renderer.createElement(tagName);
-        // This make circular references between DOMElement and FuelElement,
-        // but all disposable FuelElement will cleanup at stem and all references will be cut off.
-        // So, this circular ref does'nt make leaks.
-        dom[DOM_LINK] = fuelElement;
-        fuelElement.dom = dom;
+        var dom = fuelElement.dom = domops_1.domOps.newElement(tagName);
         var isScoped = false;
-        for (var name_1 in props) {
-            if (name_1 === 'children') {
+        var keys = util_1.keyList(props);
+        for (var i = 0, len = keys.length; i < len; ++i) {
+            var name_1 = keys[i];
+            if (name_1 === 'children' || name_1 === 'key') {
                 continue;
             }
             var value = props[name_1];
@@ -484,7 +570,7 @@ exports.FuelElementView = {
             else if (name_1 === 'scoped') {
                 isScoped = true;
             }
-            else if (((value.isObservable || value.subscribe)) && isScoped) {
+            else if (value && ((value.isObservable || value.subscribe)) && isScoped) {
                 makeStem(fuelElement, name_1, value, createStem);
                 continue;
             }
@@ -515,6 +601,7 @@ exports.FuelElementView = {
         return dom;
     }
 };
+var isComponent = exports.FuelElementView.isComponent, isStatelessComponent = exports.FuelElementView.isStatelessComponent, isComponentClass = exports.FuelElementView.isComponentClass, isTextNode = exports.FuelElementView.isTextNode, isFuelElement = exports.FuelElementView.isFuelElement, isFragment = exports.FuelElementView.isFragment, getTextValueOf = exports.FuelElementView.getTextValueOf, initFuelElementBits = exports.FuelElementView.initFuelElementBits;
 function booleanAttr(el, name, value) {
     if (value) {
         el[name] = name;
@@ -523,33 +610,25 @@ function booleanAttr(el, name, value) {
         el.removeAttribute(name);
     }
 }
-function mergeProps(oldP, p) {
-    var buf = {};
-    for (var i = 0, len = oldP.length; i < len; i++) {
-        buf[oldP[i].name] = i;
-    }
-    for (var key in p) {
-        if (buf[key]) {
-            oldP[buf[key]].value = p[key];
-        }
-        else {
-            oldP.push({ name: key, value: p[key] });
-        }
-    }
-    return oldP;
-}
 function cloneElement(fuelElement, props, children) {
     if (props === void 0) { props = {}; }
     if (children === void 0) { children = fuelElement.children; }
     util_1.invariant(!exports.FuelElementView.isFuelElement(fuelElement), "cloneElement only clonable FuelElement but got = " + fuelElement);
-    var el = makeFuelElement(fuelElement.type, fuelElement.key, mergeProps(fuelElement.props.slice(), props), children);
+    var el = makeFuelElement(fuelElement.type, fuelElement.key, util_1.merge(fuelElement.props, props), children);
     el._stem = fuelElement._stem;
     el._componentInstance = fuelElement._componentInstance;
-    el._componentRenderedElementTreeCache = fuelElement._componentRenderedElementTreeCache;
-    el._subscriptions = fuelElement._subscriptions;
+    el._ownerElement = fuelElement._ownerElement;
+    el._flags = fuelElement._flags;
     return el;
 }
 exports.cloneElement = cloneElement;
+/**
+ * Create text representation.
+ */
+function createTextNode(child) {
+    return makeFuelElement(TEXT_NAME, null, { value: child });
+}
+exports.createTextNode = createTextNode;
 function makeStem(fuelElement, name, value, createStem) {
     if (value.subscribe) {
         if (!fuelElement._subscriptions) {
@@ -572,29 +651,58 @@ function makeStem(fuelElement, name, value, createStem) {
         fuelElement._stem.registerOwner(fuelElement);
     }
 }
+var FRAGMENT_NAME = 'SYNTHETIC_FRAGMENT';
+var TEXT_NAME = 'SYNTHETIC_TEXT';
 function makeFuelElement(type, key, props, children) {
     if (key === void 0) { key = null; }
     if (children === void 0) { children = []; }
-    return _a = {},
-        _a[FUEL_ELEMENT_MARK] = type_1.Bytes.FUEL_ELEMENT_MARK,
-        _a.type = type,
-        _a.key = key,
-        _a.props = props,
-        _a.children = children,
-        _a.dom = null,
-        _a._ownerElement = null,
-        _a._unmounted = false,
-        _a._stem = null,
-        _a._componentInstance = null,
-        _a._componentRenderedElementTreeCache = null,
-        _a._keymap = null,
-        _a._subscriptions = null,
-        _a;
-    var _a;
+    var isFn = isFunction(type);
+    return {
+        type: type,
+        key: key,
+        props: props,
+        children: children,
+        dom: null,
+        _ownerElement: null,
+        _flags: initFuelElementBits(type),
+        _stem: null,
+        _componentInstance: null,
+        _componentRenderedElementTreeCache: null,
+        _subscriptions: null
+    };
 }
 exports.makeFuelElement = makeFuelElement;
+function makeFragment(children) {
+    var ret = makeFuelElement(FRAGMENT_NAME, null, {}, children);
+    return ret;
+}
+exports.makeFragment = makeFragment;
+exports.FLY_WEIGHT_ELEMENT_A = createTextNode('');
+exports.FLY_WEIGHT_ELEMENT_B = createTextNode('');
+exports.FLY_WEIGHT_FRAGMENT_A = makeFragment([]);
+exports.FLY_WEIGHT_FRAGMENT_B = makeFragment([]);
+function wrapNode(parent, value, wrapTarget, wrapFragment) {
+    if (value === null) {
+        return null;
+    }
+    if (!isFragment(parent) && Array.isArray(value)) {
+        wrapFragment.key = null;
+        wrapFragment.dom = parent ? parent.dom : null;
+        wrapFragment.children = value;
+        return wrapFragment;
+    }
+    else if (!isFuelElement(value)) {
+        wrapTarget.key = null;
+        wrapTarget.dom = null;
+        wrapTarget.props['value'] = "" + value;
+        return wrapTarget;
+    }
+    else
+        return value;
+}
+exports.wrapNode = wrapNode;
 
-},{"11":11,"12":12,"4":4,"7":7}],4:[function(_dereq_,module,exports){
+},{"17":17,"18":18,"3":3,"5":5,"9":9}],5:[function(_dereq_,module,exports){
 /**
  * The MIT License (MIT)
  * Copyright (c) Taketoshi Aono
@@ -613,7 +721,7 @@ exports.makeFuelElement = makeFuelElement;
  */
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-var util_1 = _dereq_(12);
+var util_1 = _dereq_(18);
 var FUEL_EVENT_SYM = util_1.Symbol('__fuelevent');
 var ROOT_EVENT_SYM = util_1.Symbol('__root_events');
 var ON_REGEXP = /^on/;
@@ -694,7 +802,7 @@ var SharedEventHandlerImpl = (function () {
 }());
 exports.SharedEventHandlerImpl = SharedEventHandlerImpl;
 
-},{"12":12}],5:[function(_dereq_,module,exports){
+},{"18":18}],6:[function(_dereq_,module,exports){
 /**
  * The MIT License (MIT)
  * Copyright (c) Taketoshi Aono
@@ -713,48 +821,48 @@ exports.SharedEventHandlerImpl = SharedEventHandlerImpl;
  */
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-var tslib_1 = _dereq_(13);
-var stem_1 = _dereq_(9);
-var element_1 = _dereq_(3);
-var util_1 = _dereq_(12);
-/**
- * Iterate over all children and if array is exists, flatten that and
- * if text is exists, convert it to FuelElement.
- * @param arr Children elements.
- * @param skipArray Skip checking array type.
- * @returns Flattened array of FuelElement.
- */
-function checkChildren(arr, skipArray) {
-    if (skipArray === void 0) { skipArray = false; }
-    var ret = [];
-    for (var i = 0, len = arr.length; i < len; i++) {
-        var v = arr[i];
-        if (v === null) {
-            continue;
-        }
-        util_1.invariant(v === undefined, 'Undefined passed as element, it\'s seem to misstakes.');
-        if (element_1.FuelElementView.isFuelElement(v)) {
-            ret.push(v);
-        }
-        else if (!skipArray && Array.isArray(v)) {
-            // We do not check inside children array.
-            // So if array exists in children array,
-            // that treated as text.
-            ret = checkChildren(v, true).concat(ret);
-        }
-        else {
-            var textNode = createTextNode(v.toString());
-            ret.push(textNode);
-        }
-    }
-    return ret;
+function makeForest(parent, elements) {
+    return {
+        parent: parent,
+        elements: elements
+    };
 }
+exports.makeForest = makeForest;
+exports.FORESET_SENTINEL = Object.freeze(makeForest(null, []));
+
+},{}],7:[function(_dereq_,module,exports){
 /**
- * Create text representation.
+ * The MIT License (MIT)
+ * Copyright (c) Taketoshi Aono
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ * @fileoverview
+ * @author Taketoshi Aono
  */
-function createTextNode(child) {
-    return element_1.makeFuelElement(element_1.FuelElementView.allocateTextTagName(), null, [{ name: 'value', value: child }]);
-}
+"use strict";
+var __extends = (this && this.__extends) || (function () {
+    var extendStatics = Object.setPrototypeOf ||
+        ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
+        function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
+    return function (d, b) {
+        extendStatics(d, b);
+        function __() { this.constructor = d; }
+        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+    };
+})();
+Object.defineProperty(exports, "__esModule", { value: true });
+var element_1 = _dereq_(4);
+var element_2 = _dereq_(13);
+var util_1 = _dereq_(18);
+var difference_1 = _dereq_(1);
 var VALID_TYPES = { 'string': 1, 'function': 1 };
 var ComponentImpl = (function () {
     function ComponentImpl(_props, _context) {
@@ -763,37 +871,65 @@ var ComponentImpl = (function () {
         this._props = _props;
         this._context = _context;
         this.refs = {};
+        this['_componentRenderedElementTreeCache'] = null;
     }
-    Object.defineProperty(ComponentImpl.prototype, 'props', {
+    Object.defineProperty(ComponentImpl.prototype, "state", {
+        get: function () {
+            return this._state;
+        },
+        set: function (value) {
+            this._state = value;
+        },
+        enumerable: true,
+        configurable: true
+    });
+    Object.defineProperty(ComponentImpl.prototype, "props", {
         get: function () { return this._props; },
         enumerable: true,
         configurable: true
     });
-    Object.defineProperty(ComponentImpl.prototype, 'context', {
+    Object.defineProperty(ComponentImpl.prototype, "context", {
         get: function () { return this._context; },
         enumerable: true,
         configurable: true
     });
-    ComponentImpl.prototype['componentWillUnmount'] = function () { };
-    ComponentImpl.prototype['componentWillMount'] = function () { };
-    ComponentImpl.prototype['componentDidMount'] = function () { };
-    ComponentImpl.prototype['componentWillUpdate'] = function () { };
-    ComponentImpl.prototype['componentDidUpdate'] = function () { };
-    ComponentImpl.prototype['componentWillReceiveProps'] = function (props) { };
-    ComponentImpl.prototype['shouldComponentUpdate'] = function (nextProps, prevProps) { return true; };
-    ComponentImpl.prototype['render'] = function () { return null; };
-    ComponentImpl.prototype['getChildContext'] = function () { return {}; };
+    ComponentImpl.prototype.componentWillUnmount = function () { };
+    ComponentImpl.prototype.componentWillMount = function () { };
+    ComponentImpl.prototype.componentDidMount = function () { };
+    ComponentImpl.prototype.componentWillUpdate = function () { };
+    ComponentImpl.prototype.componentDidUpdate = function () { };
+    ComponentImpl.prototype.componentWillReceiveProps = function (props) { };
+    ComponentImpl.prototype.shouldComponentUpdate = function (nextProps, prevProps) { return true; };
+    ComponentImpl.prototype.render = function () { return null; };
+    ComponentImpl.prototype.getChildContext = function () { return {}; };
     ;
     /**
      * Will be rewrited after.
      */
-    ComponentImpl.prototype['setState'] = function (state, cb) {
-        this.state = util_1.merge(this.state, state);
+    ComponentImpl.prototype.setState = function (state, cb) {
+        if (typeof state === 'function') {
+            var nextState = state(this._state, this._props);
+            if (!difference_1.isStateUpdated(this._state, nextState)) {
+                return;
+            }
+            this._state = nextState;
+        }
+        else {
+            if (!difference_1.isStateUpdated(this._state, state)) {
+                return;
+            }
+            this._state = util_1.merge(this._state, state);
+        }
+        this.forceUpdate(cb);
+    };
+    ComponentImpl.prototype.forceUpdate = function (cb) {
         this.componentWillUpdate();
         var newContext = util_1.merge(this.context || {}, this.getChildContext());
         var tree = this.render();
         var fuelElement = this[element_1.INSTANCE_ELEMENT_SYM];
         tree._componentInstance = this;
+        tree._ownerElement = fuelElement;
+        tree._stem = fuelElement._stem;
         fuelElement._stem.render(tree, function () {
             fuelElement._componentRenderedElementTreeCache = tree;
             cb && cb();
@@ -803,7 +939,7 @@ var ComponentImpl = (function () {
 }());
 exports.ComponentImpl = ComponentImpl;
 var PureComponentImpl = (function (_super) {
-    tslib_1.__extends(PureComponentImpl, _super);
+    __extends(PureComponentImpl, _super);
     function PureComponentImpl() {
         return _super !== null && _super.apply(this, arguments) || this;
     }
@@ -816,7 +952,7 @@ var PureComponentImpl = (function (_super) {
                 return true;
             }
         }
-        if (Object.keys(nextProps).length !== Object.keys(prevProps).length) {
+        if (util_1.keyList(nextProps).length !== util_1.keyList(prevProps).length) {
             return true;
         }
         return false;
@@ -824,6 +960,8 @@ var PureComponentImpl = (function (_super) {
     return PureComponentImpl;
 }(ComponentImpl));
 exports.PureComponentImpl = PureComponentImpl;
+var isComponent = element_1.FuelElementView.isComponent;
+var use = element_2.ElementRecycler.use;
 var Fuel = (function () {
     function Fuel() {
     }
@@ -833,29 +971,15 @@ var Fuel = (function () {
             children[_i - 2] = arguments[_i];
         }
         util_1.invariant(!VALID_TYPES[typeof type], "Fuel element only accept one of 'string' or 'function' but got " + type);
-        if (!props) {
-            props = {};
-        }
-        var attrs = {};
-        for (var key in props) {
-            if (key !== 'key') {
-                attrs[key] = props[key];
-            }
-        }
-        attrs.children = checkChildren(children);
-        var el = element_1.makeFuelElement(typeof type === 'string' ? element_1.FuelElementView.allocateTagName(type) : type, props.key, attrs, attrs.children);
-        // If element is component, We set stem to this FuelElement.
-        if (element_1.FuelElementView.isComponent(el) || props.scoped) {
-            el._stem = new stem_1.FuelStem();
-        }
-        return el;
+        props = props || {};
+        props.children = children;
+        return use(type, props, children) || element_1.makeFuelElement(type, props.key, props, props.children);
     };
     Fuel.unmountComponentAtNode = function (el) {
         var fuelElement = element_1.FuelElementView.getFuelElementFromNode(el);
         if (fuelElement) {
-            fuelElement._stem.unmountComponent(fuelElement, function () {
-                el['innerHTML'] = '';
-            });
+            el.textContent = '';
+            fuelElement._stem.unmountComponent(fuelElement);
             element_1.FuelElementView.detachFuelElementFromNode(el);
         }
     };
@@ -891,7 +1015,7 @@ exports.Fuel = Fuel;
  */
 exports.React = Fuel;
 
-},{"12":12,"13":13,"3":3,"9":9}],6:[function(_dereq_,module,exports){
+},{"1":1,"13":13,"18":18,"4":4}],8:[function(_dereq_,module,exports){
 /**
  * The MIT License (MIT)
  * Copyright (c) Taketoshi Aono
@@ -913,12 +1037,12 @@ function __export(m) {
     for (var p in m) if (!exports.hasOwnProperty(p)) exports[p] = m[p];
 }
 Object.defineProperty(exports, "__esModule", { value: true });
-var fuel_1 = _dereq_(5);
+var fuel_1 = _dereq_(7);
 exports.Fuel = fuel_1.Fuel;
 exports.React = fuel_1.React;
 __export(_dereq_(2));
 
-},{"2":2,"5":5}],7:[function(_dereq_,module,exports){
+},{"2":2,"7":7}],9:[function(_dereq_,module,exports){
 /**
  * The MIT License (MIT)
  * Copyright (c) Taketoshi Aono
@@ -985,7 +1109,7 @@ function setStyle(el, name, value) {
 }
 exports.setStyle = setStyle;
 
-},{}],8:[function(_dereq_,module,exports){
+},{}],10:[function(_dereq_,module,exports){
 /**
  * The MIT License (MIT)
  * Copyright (c) Taketoshi Aono
@@ -1004,261 +1128,687 @@ exports.setStyle = setStyle;
  */
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-var DOM_NODE_CACHE = {};
-var DomRenderer = (function () {
-    function DomRenderer() {
-        this.id = 0;
-    }
-    DomRenderer.prototype.updateId = function () { this.id++; };
-    DomRenderer.prototype.createElement = function (tagName) {
-        if (DOM_NODE_CACHE[tagName]) {
-            return DOM_NODE_CACHE[tagName].cloneNode(false);
-        }
-        var ret = DOM_NODE_CACHE[tagName] = document.createElement(tagName);
-        ret.setAttribute('data-id', "" + this.id);
-        return ret;
-    };
-    DomRenderer.prototype.createTextNode = function (text) {
-        return document.createTextNode(text);
-    };
-    return DomRenderer;
-}());
-exports.DomRenderer = DomRenderer;
-
-},{}],9:[function(_dereq_,module,exports){
-/**
- * The MIT License (MIT)
- * Copyright (c) Taketoshi Aono
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
- * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- * @fileoverview
- * @author Taketoshi Aono
- */
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-var type_1 = _dereq_(11);
-var node_1 = _dereq_(7);
-var tree_1 = _dereq_(10);
-var element_1 = _dereq_(3);
 var difference_1 = _dereq_(1);
-function createStem() {
-    return new FuelStem();
-}
-function replaceElement(root, parent, oldElement, newElement, isKeyedItems, renderer) {
-    var newDom = element_1.FuelElementView.createDomElement(root, newElement, renderer, createStem);
-    var oldDom = oldElement.dom;
-    if (oldDom.nodeType === 1 && newDom.nodeType === 1) {
-        var children = oldDom.children;
-        while (children.length) {
-            newDom.appendChild(children[0]);
-        }
+var element_1 = _dereq_(4);
+var util_1 = _dereq_(18);
+var forest_1 = _dereq_(6);
+var isComponent = element_1.FuelElementView.isComponent, instantiateComponent = element_1.FuelElementView.instantiateComponent, getComponentRenderedTree = element_1.FuelElementView.getComponentRenderedTree, stripComponent = element_1.FuelElementView.stripComponent, isFuelElement = element_1.FuelElementView.isFuelElement, isFragment = element_1.FuelElementView.isFragment, isTextNode = element_1.FuelElementView.isTextNode, nameOf = element_1.FuelElementView.nameOf;
+var wrap = element_1.wrapNode;
+/**
+ * Render Component of new tree and strip old tree component.
+ * @param context Context object.
+ * @param leftElement New vdom tree.
+ * @param rightElement old vdom tree.
+ * @param createStem Stem factory function.
+ * @returns Array of [new-rendered-vdom-tree, old-rendered-vdom-tree, updated-context]
+ */
+function renderComponent(context, leftElement, rightElement, createStem) {
+    while (isComponent(leftElement)) {
+        _a = instantiateComponent(context, leftElement, createStem), leftElement = _a[0], context = _a[1];
     }
-    var parentDom = parent.dom;
-    if (!isKeyedItems) {
-        parentDom.replaceChild(newDom, oldDom);
+    if (isComponent(rightElement)) {
+        rightElement = stripComponent(rightElement);
     }
-    else {
-        parentDom.removeChild(oldDom);
-        parentDom.appendChild(newDom);
-    }
-}
-function copyElementRef(oldElement, newElement, isKeyedItem) {
-    newElement.dom = oldElement.dom;
-    element_1.FuelElementView.attachFuelElementToNode(newElement.dom, newElement);
-    if (isKeyedItem) {
-        newElement.dom.parentNode.appendChild(newElement.dom);
-    }
-}
-function updateElement(diff, newElement) {
-    var domElement = newElement.dom;
-    var strippedRoot = element_1.FuelElementView.stripComponent(newElement._ownerElement);
-    for (var i = 0, len = diff.attr.length; i < len; i++) {
-        var _a = diff.attr[i], key = _a.key, value = _a.value, state = _a.state;
-        switch (state) {
-            case 1 /* NEW */:
-            case 3 /* REPLACED */:
-                if (type_1.DOMEvents[key]) {
-                    var lowerKey = key.slice(2).toLowerCase();
-                    strippedRoot._stem.getEventHandler().replaceEvent(newElement.dom, lowerKey, value);
-                }
-                else {
-                    domElement[key] = value;
-                }
-                break;
-            case 5 /* STYLE_CHANGED */:
-                for (var style in value) {
-                    var val = value[style];
-                    node_1.setStyle(domElement, style, val);
-                }
-                break;
-            case 2 /* REMOVED */:
-                if (type_1.DOMEvents[key]) {
-                    var lowerKey = key.slice(2).toLowerCase();
-                    strippedRoot._stem.getEventHandler().removeEvent(newElement.dom, lowerKey);
-                }
-                else {
-                    domElement.removeAttribute(key);
-                }
-            default:
-        }
-    }
-}
-function update(_a) {
-    var parent = _a.parent, newElement = _a.newElement, oldElement = _a.oldElement, isKeyedItem = _a.isKeyedItem, difference = _a.difference, context = _a.context;
-    var renderer = FuelStem.renderer;
-    // for (let i = 0, len = batches.length; i < len; i++) {
-    //   let {parent, newElement, oldElement, isKeyedItem, difference, root, context} = batches[i];
-    if (difference_1.isNewElement(difference)) {
-        if (parent) {
-            parent.dom.appendChild(tree_1.fastCreateDomTree(context, newElement, renderer, createStem));
-            element_1.FuelElementView.invokeDidMount(newElement);
-        }
-        else {
-            var tree = tree_1.fastCreateDomTree(context, newElement, renderer, createStem);
-            if (oldElement) {
-                parent.dom.appendChild(tree);
-                element_1.FuelElementView.invokeDidMount(newElement);
-                element_1.FuelElementView.invokeWillUnmount(oldElement);
-            }
-        }
-    }
-    else if (difference_1.isRemoveElement(difference)) {
-        element_1.FuelElementView.invokeWillUnmount(oldElement);
-        oldElement.dom.parentNode.removeChild(oldElement.dom);
-        oldElement._stem = null;
-    }
-    else if (difference_1.isReplaceElement(difference)) {
-        element_1.FuelElementView.invokeWillUnmount(oldElement);
-        parent.dom.removeChild(oldElement.dom);
-        parent.dom.appendChild(tree_1.fastCreateDomTree(context, newElement, renderer, createStem));
-        element_1.FuelElementView.invokeDidMount(newElement);
-    }
-    else if (difference_1.isTextChanged(difference)) {
-        newElement.dom = oldElement.dom;
-        element_1.FuelElementView.attachFuelElementToNode(newElement.dom, newElement);
-        newElement.dom.textContent = element_1.FuelElementView.getTextValueOf(newElement);
-        element_1.FuelElementView.invokeDidUpdate(newElement);
-    }
-    else {
-        copyElementRef(oldElement, newElement, isKeyedItem);
-        updateElement(difference, newElement);
-        element_1.FuelElementView.invokeDidUpdate(newElement);
-    }
-    if (difference_1.isCreateChildren(difference)) {
-        tree_1.fastCreateDomTree(context, newElement, renderer, createStem);
-    }
-    //  }
-}
-function makeInitialStackState(context, newElement, oldElement) {
-    return [
-        {
-            newElement: newElement,
-            oldElement: oldElement,
-            newChildren: null,
-            oldChildren: null,
-            parsed: false,
-            difference: null,
-            context: context,
-            isKeyedItem: false,
-            childrenIndex: 0
-        }
-    ];
-}
-function createNextStackState(context, parentState, prev, oldElement) {
-    var newChild = prev.newChildren[prev.childrenIndex++];
-    var oldChild;
-    var isKeyedItem = false;
-    if (parentState) {
-        var parentNewElement = parentState.newElement, parentOldElement = parentState.oldElement;
-        if (parentOldElement && parentOldElement._keymap && newChild && parentOldElement._keymap[newChild.key]) {
-            oldChild = parentOldElement._keymap[newChild.key];
-            if (parentNewElement && !parentNewElement._keymap) {
-                parentNewElement._keymap = {};
-                parentNewElement._keymap[newChild.key] = newChild;
-            }
-            var index = prev.oldChildren.indexOf(oldChild);
-            if (index !== -1) {
-                prev.oldChildren.splice(index, 1);
-                isKeyedItem = true;
-            }
-            else {
-                oldChild = prev.oldChildren[prev.childrenIndex];
-                isKeyedItem = false;
-            }
-        }
-        else {
-            oldChild = prev.oldChildren[prev.childrenIndex];
-            isKeyedItem = false;
-        }
-    }
-    else {
-        oldChild = prev.oldChildren[prev.childrenIndex];
-        isKeyedItem = false;
-    }
-    if (newChild && newChild._unmounted) {
-        newChild = null;
-    }
-    if (newChild && !newChild._ownerElement) {
-        newChild._ownerElement = prev.newElement._ownerElement;
-    }
-    return {
-        newElement: newChild,
-        oldElement: oldChild,
-        newChildren: null,
-        oldChildren: null,
-        parsed: false,
-        difference: null,
-        context: context,
-        isKeyedItem: isKeyedItem,
-        childrenIndex: 0
-    };
-}
-function patchComponent(context, newElement, oldElement) {
-    if (newElement && element_1.FuelElementView.isComponent(newElement)) {
-        if (oldElement && oldElement.type !== newElement.type) {
-            while (newElement && element_1.FuelElementView.isComponent(newElement)) {
-                _a = element_1.FuelElementView.instantiateComponent(context, newElement), newElement = _a[0], context = _a[1];
-            }
-        }
-        else {
-            while (newElement && element_1.FuelElementView.isComponent(newElement)) {
-                if (newElement && oldElement && newElement.type === oldElement.type) {
-                    newElement._componentInstance = oldElement._componentInstance;
-                }
-                var revealedOldElement = oldElement;
-                if (oldElement && element_1.FuelElementView.isComponent(oldElement)) {
-                    revealedOldElement = element_1.FuelElementView.getComponentRenderedTree(oldElement);
-                }
-                var _b = element_1.FuelElementView.instantiateComponent(context, newElement, oldElement), stripedNewTree = _b[0], newContext = _b[1];
-                context = newContext;
-                oldElement = revealedOldElement;
-                newElement = stripedNewTree;
-            }
-        }
-    }
-    if (oldElement && element_1.FuelElementView.isComponent(oldElement)) {
-        oldElement = element_1.FuelElementView.stripComponent(oldElement);
-    }
-    return [context, newElement, oldElement];
+    return [leftElement, rightElement, context];
     var _a;
 }
+/**
+ * Create indices of key.
+ * @param start Start index.
+ * @param end End index.
+ * @param elementList List of FuelElement.
+ * @param isCheckKeyDuplication Whether check key duplication or not.
+ * @returns Map of key and position.
+ */
+function makeKeyIndices(start, end, elementList, isCheckKeyDuplication) {
+    var keyIndices = {};
+    for (; start < end; start++) {
+        var el = elementList[start];
+        var key = el.key;
+        if (isFuelElement(el) && key !== null && key !== undefined) {
+            if (isCheckKeyDuplication) {
+                util_1.invariant(keyIndices[key], "Duplicate key(" + key + ") found on " + nameOf(el) + ".");
+            }
+            keyIndices[key] = start;
+        }
+    }
+    return keyIndices;
+}
+/**
+ * Compare and patch two vdom tree.
+ * Logic inspired by https://github.com/dfilatov/vidom
+ * @param rootContext Context
+ * @param nextElement New vdom tree.
+ * @param prevElement Old vdom tree.
+ * @param patchOps Patch operations.
+ * @param createStem Stem factory function.
+ * @param runtimeKeyCheck Whether check key duplication or not.
+ */
+function patch(rootContext, nextElement, prevElement, patchOps, createStem, runtimeKeyCheck) {
+    if (runtimeKeyCheck === void 0) { runtimeKeyCheck = false; }
+    var _a = renderComponent(rootContext, nextElement, prevElement, createStem), revealedNextElement = _a[0], revealedPrevElement = _a[1], context = _a[2];
+    var cursor = 0;
+    var currentNewTree = [forest_1.makeForest(null, [revealedNextElement])];
+    var currentOldTree = [forest_1.makeForest(null, [revealedPrevElement])];
+    var end = currentNewTree.length;
+    var newRoot = [];
+    var oldRoot = [];
+    var rightIndicesToSkip = {};
+    while (currentNewTree || currentOldTree) {
+        var newItem = currentNewTree[cursor] || forest_1.FORESET_SENTINEL;
+        var oldItem = currentOldTree[cursor] || forest_1.FORESET_SENTINEL;
+        var leftElementList = newItem.elements;
+        var rightElementList = oldItem.elements;
+        var newTreeLen = leftElementList.length;
+        var oldTreeLen = rightElementList.length;
+        var parent_1 = newItem.parent;
+        var keychecks = {};
+        var leftLeftCursor = 0;
+        var leftRightCursor = newTreeLen - 1;
+        var rightLeftCursor = 0;
+        var rightRightCursor = oldTreeLen - 1;
+        var leftElement = leftElementList.length ? leftElementList[0] : null;
+        var rightElement = rightElementList.length ? rightElementList[0] : null;
+        var leftRightElement = leftElementList.length ? leftElementList[leftRightCursor] : null;
+        var rightRightElement = rightElementList.length ? rightElementList[rightRightCursor] : null;
+        var move = 0 /* NONE */;
+        var keyIndices = null;
+        var index = 0;
+        var leftLeftElementKey = leftElement && leftElement.key ? leftElement.key : null;
+        var leftRightElementKey = leftRightElement && leftRightElement.key ? leftRightElement.key : null;
+        var rightLeftElementKey = rightElement && rightElement.key ? rightElement.key : null;
+        var rightRightElementKey = rightRightElement && rightRightElement.key ? rightRightElement.key : null;
+        while (leftRightCursor >= leftLeftCursor && rightRightCursor >= rightLeftCursor) {
+            var move_1 = 0 /* NONE */;
+            var matchType = 0;
+            if (rightLeftCursor in rightIndicesToSkip) {
+                matchType = 4 /* UPDATE_RIGHT_LEFT */;
+            }
+            else if (rightRightCursor in rightIndicesToSkip) {
+                matchType = 8 /* UPDATE_RIGHT_RIGHT */;
+            }
+            else {
+                var chosenNewElement = leftElement;
+                var chosenOldElement = rightElement;
+                if (leftLeftElementKey === rightLeftElementKey) {
+                    // []...
+                    // []...
+                    index = leftLeftCursor;
+                    matchType |= (1 /* UPDATE_LEFT_LEFT */ | 4 /* UPDATE_RIGHT_LEFT */);
+                }
+                else if (leftRightElementKey === rightRightElementKey) {
+                    // ...[]
+                    // ...[]
+                    chosenNewElement = leftRightElement;
+                    chosenOldElement = rightRightElement;
+                    index = leftRightCursor;
+                    matchType |= (2 /* UPDATE_LEFT_RIGHT */ | 8 /* UPDATE_RIGHT_RIGHT */);
+                }
+                else if (leftLeftElementKey !== null && leftLeftElementKey === rightRightElementKey) {
+                    // []...
+                    // ...[]
+                    chosenOldElement = rightRightElement;
+                    index = leftLeftCursor;
+                    move_1 = 1 /* BEFORE */;
+                    matchType |= (1 /* UPDATE_LEFT_LEFT */ | 8 /* UPDATE_RIGHT_RIGHT */);
+                }
+                else if (leftRightElementKey !== null && leftRightElementKey === rightLeftElementKey) {
+                    //  ...[]
+                    //  []...
+                    chosenNewElement = leftRightElement;
+                    index = leftRightCursor;
+                    move_1 = 2 /* AFTER */;
+                    matchType |= (2 /* UPDATE_LEFT_RIGHT */ | 4 /* UPDATE_RIGHT_LEFT */);
+                }
+                else if (leftLeftElementKey === null && rightLeftElementKey !== null) {
+                    chosenOldElement = null;
+                    matchType |= 1 /* UPDATE_LEFT_LEFT */;
+                }
+                else if (leftLeftElementKey !== null && rightLeftElementKey === null) {
+                    chosenNewElement = null;
+                    matchType |= 4 /* UPDATE_RIGHT_LEFT */;
+                }
+                else {
+                    if (!keyIndices) {
+                        keyIndices = makeKeyIndices(rightLeftCursor, rightRightCursor, rightElementList, runtimeKeyCheck);
+                    }
+                    if (leftLeftElementKey !== null) {
+                        var index_1 = keyIndices[leftLeftElementKey];
+                        if (index_1 !== undefined) {
+                            rightIndicesToSkip[index_1] = true;
+                            chosenOldElement = rightElementList[index_1];
+                            move_1 = 1 /* BEFORE */;
+                        }
+                        else {
+                            chosenOldElement = null;
+                        }
+                    }
+                    index = leftLeftCursor;
+                    matchType |= 1 /* UPDATE_LEFT_LEFT */;
+                }
+                if (runtimeKeyCheck) {
+                    if (chosenNewElement) {
+                        var newKey = chosenNewElement.key;
+                        if (util_1.isDefined(newKey)) {
+                            util_1.invariant(keychecks[newKey], "Duplicate key(" + newKey + ") found on " + nameOf(chosenNewElement) + ".");
+                            keychecks[newKey] = 1;
+                        }
+                    }
+                }
+                var newElement = wrap(parent_1, chosenNewElement, element_1.FLY_WEIGHT_ELEMENT_A, element_1.FLY_WEIGHT_FRAGMENT_A);
+                var oldElement = wrap(parent_1, chosenOldElement, element_1.FLY_WEIGHT_ELEMENT_B, element_1.FLY_WEIGHT_FRAGMENT_B);
+                // Clone old element.
+                // If passed element was same as old tree (ex, this.props.children),
+                // clone old element and clear _componentRenderedElementTreeCache to recall render method.
+                if (!!newElement && !!newElement._componentRenderedElementTreeCache) {
+                    newElement = element_1.cloneElement(newElement);
+                    newElement._componentRenderedElementTreeCache = null;
+                }
+                _b = renderComponent(context, newElement, oldElement, createStem), newElement = _b[0], oldElement = _b[1], context = _b[2];
+                if (newElement || oldElement) {
+                    var nextOp = difference_1.diff(context, index, move_1, parent_1, oldElement, newElement, patchOps);
+                    if (nextOp === 1 /* CONTINUE */) {
+                        if (newElement) {
+                            newRoot.push(forest_1.makeForest(!isFragment(newElement) ? newElement : parent_1 || null, newElement.children));
+                        }
+                        else {
+                            newRoot.push(null);
+                        }
+                        if (oldElement) {
+                            oldRoot.push(forest_1.makeForest(!isFragment(oldElement) ? oldElement : parent_1 || null, oldElement.children));
+                        }
+                        else {
+                            oldRoot.push(null);
+                        }
+                    }
+                    else if (nextOp === 3 /* SKIP_CURRENT_FORESET */) {
+                        // Break loop because,
+                        // new children length = 1,
+                        // text node is newly created.
+                        // If break loop, we need to set leftLeftCursor to right most index plus one,
+                        // so in order not to operate insert or append after breaking loop.
+                        // But rightLeftCursor will not change,
+                        // because old element was cleand inenrText or innerHTML,
+                        // this mean cleanup process is skipped,
+                        // so we cleanup each elements.
+                        leftLeftCursor = leftRightCursor + 1;
+                        break;
+                    }
+                }
+            }
+            if ((matchType & 1 /* UPDATE_LEFT_LEFT */) === 1 /* UPDATE_LEFT_LEFT */) {
+                if (++leftLeftCursor <= leftRightCursor) {
+                    leftElement = leftElementList[leftLeftCursor];
+                    leftLeftElementKey = leftElement ? leftElement.key : null;
+                }
+            }
+            if ((matchType & 2 /* UPDATE_LEFT_RIGHT */) === 2 /* UPDATE_LEFT_RIGHT */) {
+                if (--leftRightCursor >= leftLeftCursor) {
+                    leftRightElement = leftElementList[leftRightCursor];
+                    leftRightElementKey = leftRightElement ? leftRightElement.key : null;
+                }
+            }
+            if ((matchType & 4 /* UPDATE_RIGHT_LEFT */) === 4 /* UPDATE_RIGHT_LEFT */) {
+                if (++rightLeftCursor <= rightRightCursor) {
+                    rightElement = rightElementList[rightLeftCursor];
+                    rightLeftElementKey = rightElement ? rightElement.key : null;
+                }
+            }
+            if ((matchType & 8 /* UPDATE_RIGHT_RIGHT */) === 8 /* UPDATE_RIGHT_RIGHT */) {
+                if (--rightRightCursor >= rightLeftCursor) {
+                    rightRightElement = rightElementList[rightRightCursor];
+                    rightRightElementKey = rightRightElement ? rightRightElement.key : null;
+                }
+            }
+        }
+        while (rightLeftCursor <= rightRightCursor) {
+            if (!rightIndicesToSkip[rightRightCursor]) {
+                var oldElement = element_1.wrapNode(parent_1, rightElementList[rightLeftCursor], element_1.FLY_WEIGHT_ELEMENT_A, element_1.FLY_WEIGHT_FRAGMENT_A);
+                patchOps.remove(rightLeftCursor, parent_1, oldElement);
+            }
+            ++rightLeftCursor;
+        }
+        while (leftLeftCursor <= leftRightCursor) {
+            var oldElement = void 0;
+            var newElement = element_1.wrapNode(parent_1, leftElementList[leftLeftCursor], element_1.FLY_WEIGHT_ELEMENT_B, element_1.FLY_WEIGHT_FRAGMENT_A);
+            _c = renderComponent(context, newElement, null, createStem), newElement = _c[0], oldElement = _c[1], context = _c[2];
+            leftLeftCursor < newTreeLen - 1 ?
+                patchOps.insert(leftLeftCursor, context, parent_1, newElement) :
+                patchOps.append(context, parent_1, newElement);
+            ++leftLeftCursor;
+        }
+        if (end === ++cursor) {
+            cursor = 0;
+            currentNewTree = newRoot.length ? newRoot : null;
+            currentOldTree = oldRoot.length ? oldRoot : null;
+            newRoot = [];
+            oldRoot = [];
+            var newLength = currentNewTree ? currentNewTree.length : 0;
+            var oldLength = currentOldTree ? currentOldTree.length : 0;
+            end = newLength > oldLength ? newLength : oldLength;
+        }
+    }
+    patchOps.executeRemove();
+    var _b, _c;
+}
+exports.patch = patch;
+
+},{"1":1,"18":18,"4":4,"6":6}],11:[function(_dereq_,module,exports){
+/**
+ * The MIT License (MIT)
+ * Copyright (c) Taketoshi Aono
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ * @fileoverview
+ * @author Taketoshi Aono
+ */
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+var type_1 = _dereq_(17);
+var node_1 = _dereq_(9);
+var tree_1 = _dereq_(16);
+var element_1 = _dereq_(4);
+var util_1 = _dereq_(18);
+var collect_1 = _dereq_(12);
+var domops_1 = _dereq_(3);
+var difference_1 = _dereq_(1);
+var getTextValueOf = element_1.FuelElementView.getTextValueOf, attachFuelElementToNode = element_1.FuelElementView.attachFuelElementToNode, invokeDidMount = element_1.FuelElementView.invokeDidMount, invokeDidUpdate = element_1.FuelElementView.invokeDidUpdate, invokeWillUnmount = element_1.FuelElementView.invokeWillUnmount, createDomElement = element_1.FuelElementView.createDomElement, isTextNode = element_1.FuelElementView.isTextNode, stripComponent = element_1.FuelElementView.stripComponent, setDisposed = element_1.FuelElementView.setDisposed, isFragment = element_1.FuelElementView.isFragment, getFuelElementFromNode = element_1.FuelElementView.getFuelElementFromNode;
+var PatchOpsImpl = (function () {
+    function PatchOpsImpl(createStem) {
+        this.createStem = createStem;
+        this.removes = [];
+    }
+    PatchOpsImpl.prototype.move = function (moveTo, moveType, oldElement) {
+        var target = oldElement.dom.parentNode.childNodes[moveTo];
+        if (moveType === 2 /* AFTER */) {
+            target = target.nextElementSibling;
+            if (!target) {
+                oldElement.dom.parentNode.appendChild(oldElement.dom);
+                return;
+            }
+        }
+        oldElement.dom.parentNode.insertBefore(oldElement.dom, target);
+    };
+    PatchOpsImpl.prototype.replace = function (index, parent, newElement, oldElement, context) {
+        invokeWillUnmount(oldElement);
+        var target = parent.dom.childNodes[index];
+        var isText = isTextNode(newElement);
+        var tree;
+        if (isText || !newElement.children.length) {
+            if (isText && target.nodeType === 3) {
+                target.nodeValue = getTextValueOf(newElement);
+                return;
+            }
+            tree = createDomElement(parent._ownerElement, newElement, this.createStem);
+        }
+        else {
+            tree = tree_1.fastCreateDomTree(context, newElement, this.createStem);
+        }
+        if (target && !isFragment(newElement)) {
+            parent.dom.replaceChild(tree, target);
+            collect_1.collect(oldElement, true);
+            invokeDidMount(newElement);
+        }
+    };
+    PatchOpsImpl.prototype.update = function (newElement, oldElement) {
+        newElement.dom = oldElement.dom;
+        var newProps = newElement.props;
+        var oldProps = oldElement.props;
+        var newPropsKeys = util_1.keyList(newProps);
+        var oldPropsKeys = util_1.keyList(oldProps);
+        var newPropsLength = newPropsKeys.length;
+        var oldPropsLength = oldPropsKeys.length;
+        var isSkip = newPropsLength === oldPropsLength && ((newPropsLength === 2 && newPropsKeys[1] === 'key') || newPropsLength === 1);
+        if (!isSkip) {
+            var keys = oldPropsLength > newPropsLength ? oldPropsKeys : newPropsKeys;
+            for (var i = 0, len = oldPropsLength > newPropsLength ? oldPropsLength : newPropsLength; i < len; i++) {
+                var key = keys[i];
+                if (key === 'children' || key === 'key') {
+                    continue;
+                }
+                if (type_1.DOMEvents[key]) {
+                    var lowerKey = key.slice(2).toLowerCase();
+                    var rootElement = stripComponent(newElement._ownerElement);
+                    if (oldProps[key]) {
+                        newElement._ownerElement._stem.getEventHandler().replaceEvent(oldElement.dom, lowerKey, newProps[key]);
+                    }
+                    else {
+                        newElement._ownerElement._stem.getEventHandler().addEvent(rootElement.dom, oldElement.dom, lowerKey, oldProps[key]);
+                    }
+                }
+                else if (key === 'style') {
+                    var _a = difference_1.compareStyle(oldProps[key] || {}, newProps[key] || {}), styleDiff = _a[0], count = _a[1];
+                    if (count) {
+                        for (var style in styleDiff) {
+                            node_1.setStyle(oldElement.dom, style, styleDiff[style]);
+                        }
+                    }
+                }
+                else if (!newProps[key]) {
+                    oldElement.dom.removeAttribute(key);
+                }
+                else if (!oldProps[key]) {
+                    oldElement.dom[key] = newProps[key];
+                }
+                else {
+                    if (!difference_1.compare(newProps[key], oldProps[key])) {
+                        oldElement.dom[key] = newProps[key];
+                    }
+                }
+            }
+        }
+        attachFuelElementToNode(newElement.dom, newElement);
+        invokeDidUpdate(newElement);
+    };
+    PatchOpsImpl.prototype.insert = function (index, context, parent, newElement) {
+        var tree;
+        if (isTextNode(newElement) || !newElement.children.length) {
+            tree = createDomElement(parent._ownerElement, newElement, this.createStem);
+        }
+        else {
+            tree = tree_1.fastCreateDomTree(context, newElement, this.createStem);
+        }
+        if (parent && parent.dom && !isFragment(newElement)) {
+            var target = parent.dom.childNodes[index];
+            parent.dom.insertBefore(tree, target);
+            invokeDidMount(newElement);
+        }
+    };
+    PatchOpsImpl.prototype.append = function (context, parent, newElement) {
+        var tree;
+        var isText = isTextNode(newElement);
+        var hasParentDom = parent && parent.dom;
+        if (isText || !newElement.children.length) {
+            if (isText && hasParentDom && parent.dom.lastChild.nodeType === 3) {
+                parent.dom.lastChild.nodeValue = getTextValueOf(newElement);
+                return;
+            }
+            tree = createDomElement(parent._ownerElement, newElement, this.createStem);
+        }
+        else {
+            tree = tree_1.fastCreateDomTree(context, newElement, this.createStem);
+        }
+        if (hasParentDom && !isFragment(newElement)) {
+            var parentNode = tree.parentNode;
+            if (parentNode && parentNode !== parent) {
+                parent.dom.appendChild(tree);
+            }
+            invokeDidMount(newElement);
+        }
+    };
+    PatchOpsImpl.prototype.remove = function (index, parent, oldElement) {
+        invokeWillUnmount(oldElement);
+        if (parent.dom) {
+            var el = parent.dom.childNodes[index];
+            if (el) {
+                this.removes.push([oldElement, el]);
+            }
+        }
+        if (!isFragment(oldElement) && !isTextNode(oldElement)) {
+            setDisposed(oldElement);
+        }
+        oldElement._stem = null;
+    };
+    PatchOpsImpl.prototype.updateText = function (index, parent, newElement) {
+        var node = parent.dom.childNodes[index];
+        var value = element_1.FuelElementView.getTextValueOf(newElement);
+        if (node) {
+            if (node.nodeType === 3) {
+                node.nodeValue = value;
+            }
+            else {
+                parent.dom.replaceChild(domops_1.domOps.newTextNode(value), node);
+            }
+        }
+        else {
+            parent.dom.appendChild(domops_1.domOps.newTextNode(value));
+        }
+    };
+    PatchOpsImpl.prototype.setText = function (parent, newElement) {
+        parent.dom.textContent = getTextValueOf(newElement);
+        console.log(parent.dom.parentNode.parentNode.parentNode);
+    };
+    PatchOpsImpl.prototype.createChildren = function (context, newElement) {
+        tree_1.fastCreateDomTree(context, newElement, this.createStem);
+    };
+    PatchOpsImpl.prototype.removeChildren = function (el) {
+        el.dom.textContent = '';
+    };
+    PatchOpsImpl.prototype.executeRemove = function () {
+        for (var i = 0, len = this.removes.length; i < len; i++) {
+            var _a = this.removes[i], el = _a[0], dom = _a[1];
+            if (dom.parentNode) {
+                dom.parentNode.removeChild(dom);
+                collect_1.collect(el, true);
+            }
+        }
+        this.removes = [];
+    };
+    return PatchOpsImpl;
+}());
+exports.PatchOpsImpl = PatchOpsImpl;
+
+},{"1":1,"12":12,"16":16,"17":17,"18":18,"3":3,"4":4,"9":9}],12:[function(_dereq_,module,exports){
+/**
+ * The MIT License (MIT)
+ * Copyright (c) Taketoshi Aono
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ * @fileoverview
+ * @author Taketoshi Aono
+ */
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+var element_1 = _dereq_(4);
+var element_2 = _dereq_(13);
+var node_1 = _dereq_(14);
+var wrap = element_1.wrapNode;
+var isTextNode = element_1.FuelElementView.isTextNode, isFragment = element_1.FuelElementView.isFragment, isDisposed = element_1.FuelElementView.isDisposed, cleanupElement = element_1.FuelElementView.cleanupElement, setDisposed = element_1.FuelElementView.setDisposed, stripComponent = element_1.FuelElementView.stripComponent;
+var recycleNode = node_1.NodeRecycler.recycle;
+var recycleElement = element_2.ElementRecycler.recycle;
+function collect(fuelElement, all, cb) {
+    doCollect(fuelElement, false, all);
+    cb && cb();
+}
+exports.collect = collect;
+/**
+ * Collect and cleanup element.
+ */
+function doCollect(fuelElement, isParentDisposed, all) {
+    var element = wrap(null, stripComponent(fuelElement), element_1.FLY_WEIGHT_ELEMENT_A, element_1.FLY_WEIGHT_FRAGMENT_A);
+    if (!element || isTextNode(element)) {
+        return;
+    }
+    if (isParentDisposed) {
+        setDisposed(element);
+    }
+    var children = element.children;
+    var isDisp = isDisposed(element);
+    var dom = element.dom;
+    if (!isFragment(element) && (all || isDisp)) {
+        if (dom && dom.childNodes.length) {
+            dom.textContent = '';
+        }
+        recycleNode(element);
+        cleanupElement(element);
+        recycleElement(element);
+    }
+    var length = children.length;
+    var cursor = 0;
+    while (length > cursor) {
+        doCollect(children[cursor++], isDisp, all);
+    }
+}
+
+},{"13":13,"14":14,"4":4}],13:[function(_dereq_,module,exports){
+/**
+ * The MIT License (MIT)
+ * Copyright (c) Taketoshi Aono
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ * @fileoverview
+ * @author Taketoshi Aono
+ */
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+var element_1 = _dereq_(4);
+var wrap = element_1.wrapNode;
+var initFuelElementBits = element_1.FuelElementView.initFuelElementBits;
+var RECYCLED_ELEMENT = [];
+var recycledElementCount = 0;
+exports.ElementRecycler = {
+    recycle: function (el) {
+        if (!el || (el._flags & 128 /* RECYCLED */) === 128 /* RECYCLED */) {
+            return;
+        }
+        if (recycledElementCount === 500) {
+            return;
+        }
+        el._componentInstance =
+            el._componentRenderedElementTreeCache =
+                el._stem =
+                    el._subscriptions =
+                        el._ownerElement =
+                            el.children =
+                                el.props =
+                                    el.key =
+                                        el.dom =
+                                            el.type = null;
+        el._flags = 128 /* RECYCLED */;
+        RECYCLED_ELEMENT[recycledElementCount++] = el;
+    },
+    use: function (type, props, children) {
+        if (recycledElementCount > 0) {
+            var el = RECYCLED_ELEMENT[--recycledElementCount];
+            RECYCLED_ELEMENT[recycledElementCount] = null;
+            el.props = props;
+            el.key = props.key;
+            el.children = children;
+            el.type = type;
+            el._flags = initFuelElementBits(type);
+            return el;
+        }
+        return null;
+    }
+};
+
+},{"4":4}],14:[function(_dereq_,module,exports){
+/**
+ * The MIT License (MIT)
+ * Copyright (c) Taketoshi Aono
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ * @fileoverview
+ * @author Taketoshi Aono
+ */
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+var util_1 = _dereq_(18);
+var recycled = 0;
+var NODE_RECYCLE_INDICES = {};
+exports.NodeRecycler = {
+    recycle: function (element) {
+        if (recycled === 500) {
+            return;
+        }
+        var dom = element.dom;
+        if (dom) {
+            var nodeName = element.type;
+            if (!NODE_RECYCLE_INDICES[nodeName]) {
+                NODE_RECYCLE_INDICES[nodeName] = { count: 0, nodes: [] };
+            }
+            var item = NODE_RECYCLE_INDICES[nodeName];
+            var keys = util_1.keyList(element.props);
+            for (var i = 0, len = keys.length; i < len; ++i) {
+                var key = keys[i];
+                if (key !== 'key' && key !== 'children') {
+                    if (key === 'className') {
+                        key = 'class';
+                    }
+                    dom.removeAttribute(key);
+                }
+            }
+            item.nodes[item.count++] = dom;
+            ++recycled;
+        }
+    },
+    use: function (name) {
+        var item = NODE_RECYCLE_INDICES[name];
+        if (item && item.count > 0) {
+            var node = item.nodes[--item.count];
+            item.nodes[item.count] = null;
+            node['__recycled'] = 0;
+            --recycled;
+            return node || null;
+        }
+        return null;
+    }
+};
+
+},{"18":18}],15:[function(_dereq_,module,exports){
+/**
+ * The MIT License (MIT)
+ * Copyright (c) Taketoshi Aono
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ * @fileoverview
+ * @author Taketoshi Aono
+ */
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+var tree_1 = _dereq_(16);
+var collect_1 = _dereq_(12);
+var patch_1 = _dereq_(10);
+var domops_1 = _dereq_(3);
+var patchops_1 = _dereq_(11);
+function createStem() { return new FuelStem(); }
 var FuelStem = (function () {
-    function FuelStem(tree) {
-        if (tree === void 0) { tree = null; }
-        this.tree = tree;
+    function FuelStem() {
         this._enabled = true;
-        this.batchs = [];
         this.batchCallback = null;
         this.lock = false;
         this.renderQueue = [];
+        this.patchOps = new patchops_1.PatchOpsImpl(createStem);
     }
     FuelStem.prototype.enterUnsafeUpdateZone = function (cb) {
         this._enabled = false;
@@ -1278,14 +1828,8 @@ var FuelStem = (function () {
         return this.sharedEventHandler;
     };
     FuelStem.prototype.renderAtAnimationFrame = function () {
-        //    requestAnimationFrame(() => {
-        if (this.batchs.length) {
-            //        update(this.batchs);
-            this.batchs.length = 0;
-            this.batchCallback && this.batchCallback();
-            this.batchCallback = null;
-        }
-        //    });
+        this.batchCallback && this.batchCallback();
+        this.batchCallback = null;
     };
     FuelStem.prototype.drainRenderQueue = function () {
         var next = this.renderQueue.shift();
@@ -1295,7 +1839,7 @@ var FuelStem = (function () {
         }
     };
     FuelStem.prototype.unmountComponent = function (fuelElement, cb) {
-        tree_1.cleanupTree(fuelElement, cb);
+        collect_1.collect(fuelElement, true, cb);
     };
     FuelStem.prototype.render = function (el, callback, context, updateOwnwer) {
         var _this = this;
@@ -1310,16 +1854,15 @@ var FuelStem = (function () {
             this.renderQueue.push({ element: el, cb: callback });
             return;
         }
-        FuelStem.renderer.updateId();
+        domops_1.domOps.updateId();
         if (this.tree) {
             this.lock = true;
-            this.patch(el, context);
-            var old_1 = this.tree;
+            patch_1.patch(context, el, this.tree, this.patchOps, createStem);
+            var old = this.tree;
             if (updateOwnwer) {
                 this.tree = el;
             }
             this.batchCallback = function () {
-                tree_1.cleanupTree(old_1);
                 callback(_this.tree.dom);
                 _this.lock = false;
                 _this.drainRenderQueue();
@@ -1331,63 +1874,17 @@ var FuelStem = (function () {
         }
     };
     FuelStem.prototype.attach = function (el, updateOwner) {
-        var domTree = tree_1.fastCreateDomTree({}, el, FuelStem.renderer, createStem);
+        var domTree = tree_1.fastCreateDomTree({}, el, createStem, domops_1.domOps.newFragment());
         if (updateOwner) {
             this.tree = el;
         }
         return domTree;
     };
-    FuelStem.prototype.patch = function (newTree, context) {
-        if (this.batchs.length) {
-            this.batchs.length = 0;
-        }
-        var stack = makeInitialStackState(context, newTree, this.tree);
-        var parent = null;
-        while (stack.length) {
-            var next = stack.pop();
-            var newElement = next.newElement, oldElement = next.oldElement, context_1 = next.context, isKeyedItem = next.isKeyedItem;
-            var difference = void 0;
-            if (!next.parsed) {
-                _a = patchComponent(context_1, newElement, oldElement), context_1 = _a[0], newElement = _a[1], oldElement = _a[2];
-                next.newElement = newElement;
-                next.oldElement = oldElement;
-                next.context = context_1;
-                if (!newElement && !oldElement) {
-                    continue;
-                }
-                if (newElement) {
-                    if (oldElement) {
-                        newElement._stem = oldElement._stem;
-                    }
-                }
-                difference = difference_1.diff(oldElement, newElement);
-                next.difference = difference;
-                update({
-                    parent: parent ? parent.newElement : null,
-                    newElement: newElement,
-                    oldElement: oldElement,
-                    isKeyedItem: isKeyedItem,
-                    difference: difference,
-                    context: next.context
-                });
-                next.newChildren = newElement ? newElement.children : [];
-                next.oldChildren = oldElement ? oldElement.children : [];
-                next.parsed = true;
-            }
-            if ((next.newChildren.length > next.childrenIndex || next.oldChildren.length > next.childrenIndex) &&
-                (!next.difference || next.difference.flags === 0)) {
-                stack.push(next);
-                stack.push(createNextStackState(context_1, parent, next, oldElement));
-                parent = next;
-            }
-        }
-        var _a;
-    };
     return FuelStem;
 }());
 exports.FuelStem = FuelStem;
 
-},{"1":1,"10":10,"11":11,"3":3,"7":7}],10:[function(_dereq_,module,exports){
+},{"10":10,"11":11,"12":12,"16":16,"3":3}],16:[function(_dereq_,module,exports){
 /**
  * The MIT License (MIT)
  * Copyright (c) Taketoshi Aono
@@ -1406,114 +1903,52 @@ exports.FuelStem = FuelStem;
  */
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-var element_1 = _dereq_(3);
-var util_1 = _dereq_(12);
-function makeInitialDomTreeStack(context, fuelElement) {
-    return [
-        {
-            element: fuelElement,
-            parentElement: null,
-            children: fuelElement.children.slice(),
-            dom: fuelElement.dom,
-            parent: null,
-            root: fuelElement._ownerElement,
-            context: context,
-            childrenIndex: 0
+var element_1 = _dereq_(4);
+var domops_1 = _dereq_(3);
+var isComponent = element_1.FuelElementView.isComponent, createDomElement = element_1.FuelElementView.createDomElement, instantiateComponent = element_1.FuelElementView.instantiateComponent, isFuelElement = element_1.FuelElementView.isFuelElement, isFragment = element_1.FuelElementView.isFragment, isTextNode = element_1.FuelElementView.isTextNode, isDisposed = element_1.FuelElementView.isDisposed, getTextValueOf = element_1.FuelElementView.getTextValueOf;
+var wrap = element_1.wrapNode;
+function fastCreateDomTree(context, element, createStem, fragment) {
+    if (fragment === void 0) { fragment = null; }
+    while (isComponent(element)) {
+        _a = instantiateComponent(context, element, createStem), element = _a[0], context = _a[1];
+    }
+    if (element) {
+        var dom = createDomElement(element._ownerElement, element, createStem);
+        var children = element.children;
+        var length_1 = children.length;
+        var flags = 0 | 0;
+        var cursor = 0;
+        if (fragment) {
+            fragment.appendChild(dom);
         }
-    ];
-}
-function fastCreateDomTree(context, fuelElement, renderer, createStem) {
-    var createdDomTreeRoot;
-    while (fuelElement && element_1.FuelElementView.isComponent(fuelElement)) {
-        _a = renderComponent(context, fuelElement, createStem), fuelElement = _a[0], context = _a[1];
-    }
-    if (!fuelElement) {
-        return;
-    }
-    var stack = makeInitialDomTreeStack(context || {}, fuelElement);
-    LOOP: while (stack.length) {
-        var next = stack.pop();
-        var hasChildren = next.children.length > next.childrenIndex;
-        if (!next.dom) {
-            var element = next.element, parentElement = next.parentElement, parent_1 = next.parent;
-            if (element.key && next.parentElement) {
-                if (!parentElement._keymap) {
-                    parentElement._keymap = {};
-                }
-                util_1.invariant(parentElement._keymap[element.key], "Duplicate key found: key = " + element.key);
-                parentElement._keymap[element.key] = element;
+        while (length_1 > cursor) {
+            var el = children[cursor++];
+            if (isFuelElement(el) || Array.isArray(el)) {
+                flags = 2 /* ELEMENT_INSERTED */;
+                dom.appendChild(fastCreateDomTree(context, wrap(null, el, element_1.FLY_WEIGHT_ELEMENT_A, element_1.FLY_WEIGHT_FRAGMENT_A), createStem));
             }
-            next.dom = element_1.FuelElementView.createDomElement(next.root, element, renderer, createStem);
-            if (!createdDomTreeRoot) {
-                createdDomTreeRoot = next.dom;
+            else if ((flags & 1 /* LAST_NODE_IS_TEXT */) > 0) {
+                dom.lastChild.nodeValue += "" + el;
             }
-            if (parent_1) {
-                parent_1.appendChild(next.dom);
-                element_1.FuelElementView.invokeDidMount(next.element);
+            else if ((flags & 2 /* ELEMENT_INSERTED */) === 0) {
+                flags |= 1 /* LAST_NODE_IS_TEXT */;
+                dom.textContent += "" + el;
+            }
+            else {
+                flags |= 1 /* LAST_NODE_IS_TEXT */;
+                dom.appendChild(domops_1.domOps.newTextNode("" + el));
             }
         }
-        var root = next.root;
-        if (hasChildren) {
-            stack.push(next);
-            var child = next.children[next.childrenIndex++];
-            if (child._stem) {
-                root = child;
-            }
-            var context_1 = next.context;
-            while (element_1.FuelElementView.isComponent(child)) {
-                root = child;
-                child._ownerElement = next.element._ownerElement;
-                _b = renderComponent(context_1, child, createStem), child = _b[0], context_1 = _b[1];
-                if (!child) {
-                    continue LOOP;
-                }
-            }
-            if (!child._ownerElement) {
-                child._ownerElement = next.element._ownerElement;
-            }
-            stack.push({ element: child, children: child.children, dom: null, parent: next.dom, parentElement: next.element, root: root, context: context_1, childrenIndex: 0 });
-        }
     }
-    return createdDomTreeRoot;
-    var _a, _b;
+    else {
+        return domops_1.domOps.newFragment();
+    }
+    return fragment || element.dom;
+    var _a;
 }
 exports.fastCreateDomTree = fastCreateDomTree;
-function renderComponent(oldContext, fuelElement, createStem) {
-    var _a = element_1.FuelElementView.instantiateComponent(oldContext, fuelElement, null), nodes = _a[0], context = _a[1];
-    if (nodes) {
-        fuelElement._stem.registerOwner(fuelElement);
-    }
-    return [nodes, context];
-}
-function cleanupTree(fuelElement, cb) {
-    doClean(fuelElement, cb);
-    //  requestIdleCallback(() => doClean(fuelElement, cb));
-}
-exports.cleanupTree = cleanupTree;
-function doClean(fuelElement, cb) {
-    var stack = [
-        {
-            element: fuelElement,
-            children: fuelElement.children.slice()
-        }
-    ];
-    while (stack.length) {
-        var next = stack.pop();
-        if (!next.element._unmounted) {
-            element_1.FuelElementView.cleanupElement(next.element);
-        }
-        if (next.children.length) {
-            stack.push(next);
-            var child = next.children.shift();
-            if (child) {
-                stack.push({ element: child, children: child.children.slice() });
-            }
-        }
-    }
-    cb && cb();
-}
 
-},{"12":12,"3":3}],11:[function(_dereq_,module,exports){
+},{"3":3,"4":4}],17:[function(_dereq_,module,exports){
 /**
  * The MIT License (MIT)
  * Copyright (c) Taketoshi Aono
@@ -1532,10 +1967,6 @@ function doClean(fuelElement, cb) {
  */
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-var BuiltinElementValue;
-(function (BuiltinElementValue) {
-    BuiltinElementValue[BuiltinElementValue["CHILDREN"] = 2] = "CHILDREN";
-})(BuiltinElementValue = exports.BuiltinElementValue || (exports.BuiltinElementValue = {}));
 exports.CONVERSATION_TABLE = {
     'className': 'class'
 };
@@ -1568,7 +1999,7 @@ exports.DOMEvents = (_a = ["Copy Cut Paste CompositionEnd CompositionStart Compo
 exports.DOMAttributes = (_b = ["defaultChecked defaultValue accept acceptCharset accessKey action allowFullScreen allowTransparency alt async autoComplete autoFocus autoPlay capture cellPadding cellSpacing charSet challenge checked classID className cols colSpan content contentEditable contextMenu controls coords crossOrigin data dateTime default defer dir disabled download draggable encType form formAction formEncType formMethod formNoValidate formTarget frameBorder headers height hidden high href hrefLang htmlFor httpEquiv icon id inputMode integrity is keyParams keyType kind label lang list loop low manifest marginHeight marginWidth max maxLength media mediaGroup method min minLength multiple muted name noValidate open optimum pattern placeholder poster preload radioGroup readOnly rel required role rows rowSpan sandbox scope scoped scrolling seamless selected shape size sizes span spellCheck src srcDoc srcLang srcSet start step style summary tabIndex target title type useMap value width wmode wrap about datatype inlist prefix property resource typeof vocab autoCapitalize autoCorrect autoSave color itemProp itemScope itemType itemID itemRef results security unselectable"], _b.raw = ["defaultChecked defaultValue accept acceptCharset accessKey action allowFullScreen allowTransparency alt async autoComplete autoFocus autoPlay capture cellPadding cellSpacing charSet challenge checked classID className cols colSpan content contentEditable contextMenu controls coords crossOrigin data dateTime default defer dir disabled download draggable encType form formAction formEncType formMethod formNoValidate formTarget frameBorder headers height hidden high href hrefLang htmlFor httpEquiv icon id inputMode integrity is keyParams keyType kind label lang list loop low manifest marginHeight marginWidth max maxLength media mediaGroup method min minLength multiple muted name noValidate open optimum pattern placeholder poster preload radioGroup readOnly rel required role rows rowSpan sandbox scope scoped scrolling seamless selected shape size sizes span spellCheck src srcDoc srcLang srcSet start step style summary tabIndex target title type useMap value width wmode wrap about datatype inlist prefix property resource typeof vocab autoCapitalize autoCorrect autoSave color itemProp itemScope itemType itemID itemRef results security unselectable"], attrmap(_b));
 var _a, _b;
 
-},{}],12:[function(_dereq_,module,exports){
+},{}],18:[function(_dereq_,module,exports){
 (function (global){
 /**
  * The MIT License (MIT)
@@ -1604,11 +2035,12 @@ exports.Symbol = typeof g.Symbol === 'function' ? g.Symbol : (function () {
 function invariant(condition, message, warn) {
     if (warn === void 0) { warn = false; }
     if (condition) {
+        var m = typeof message === 'function' ? message() : message;
         if (!warn) {
-            throw new Error(message);
+            throw new Error(m);
         }
         else {
-            console.warn(message);
+            console.warn(m);
         }
     }
 }
@@ -1624,223 +2056,28 @@ function merge(a, b) {
     return ret;
 }
 exports.merge = merge;
+var toString = Object.prototype.toString;
+var oReg = /\[object ([^\]]+)\]/;
+function typeOf(a) {
+    return toString.call(a).match(oReg)[1].toLowerCase();
+}
+exports.typeOf = typeOf;
 var HAS_REQUEST_ANIMATION_FRAME = typeof g.requestAnimationFrame === 'function';
 exports.requestAnimationFrame = HAS_REQUEST_ANIMATION_FRAME ? function (cb) { return g.requestAnimationFrame(cb); } : function (cb) { return setTimeout(cb, 60); };
 var HAS_REQUEST_IDLE_CALLBACK = typeof g['requestIdleCallback'] === 'function';
 exports.requestIdleCallback = HAS_REQUEST_IDLE_CALLBACK ? function (cb) { return g['requestIdleCallback'](cb); } : function (cb) { return cb(); };
+function isDefined(a) {
+    return a !== null && a !== undefined;
+}
+exports.isDefined = isDefined;
+exports.keyList = Object.keys;
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],13:[function(_dereq_,module,exports){
-(function (global){
-/*! *****************************************************************************
-Copyright (c) Microsoft Corporation. All rights reserved.
-Licensed under the Apache License, Version 2.0 (the "License"); you may not use
-this file except in compliance with the License. You may obtain a copy of the
-License at http://www.apache.org/licenses/LICENSE-2.0
 
-THIS CODE IS PROVIDED ON AN *AS IS* BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-KIND, EITHER EXPRESS OR IMPLIED, INCLUDING WITHOUT LIMITATION ANY IMPLIED
-WARRANTIES OR CONDITIONS OF TITLE, FITNESS FOR A PARTICULAR PURPOSE,
-MERCHANTABLITY OR NON-INFRINGEMENT.
-
-See the Apache Version 2.0 License for specific language governing permissions
-and limitations under the License.
-***************************************************************************** */
-/* global global, define, System, Reflect, Promise */
-var __extends;
-var __assign;
-var __rest;
-var __decorate;
-var __param;
-var __metadata;
-var __awaiter;
-var __generator;
-var __exportStar;
-var __values;
-var __read;
-var __spread;
-var __asyncGenerator;
-var __asyncDelegator;
-var __asyncValues;
-(function (factory) {
-    var root = typeof global === "object" ? global : typeof self === "object" ? self : typeof this === "object" ? this : {};
-    if (typeof define === "function" && define.amd) {
-        define("tslib", ["exports"], function (exports) { factory(createExporter(root, createExporter(exports))); });
-    }
-    else if (typeof module === "object" && typeof module.exports === "object") {
-        factory(createExporter(root, createExporter(module.exports)));
-    }
-    else {
-        factory(createExporter(root));
-    }
-    function createExporter(exports, previous) {
-        return function (id, v) { return exports[id] = previous ? previous(id, v) : v; };
-    }
-})
-(function (exporter) {
-    var extendStatics = Object.setPrototypeOf ||
-        ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
-        function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
-
-    __extends = function (d, b) {
-        extendStatics(d, b);
-        function __() { this.constructor = d; }
-        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-    };
-
-    __assign = Object.assign || function (t) {
-        for (var s, i = 1, n = arguments.length; i < n; i++) {
-            s = arguments[i];
-            for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p)) t[p] = s[p];
-        }
-        return t;
-    };
-
-    __rest = function (s, e) {
-        var t = {};
-        for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p) && e.indexOf(p) < 0)
-            t[p] = s[p];
-        if (s != null && typeof Object.getOwnPropertySymbols === "function")
-            for (var i = 0, p = Object.getOwnPropertySymbols(s); i < p.length; i++) if (e.indexOf(p[i]) < 0)
-                t[p[i]] = s[p[i]];
-        return t;
-    };
-
-    __decorate = function (decorators, target, key, desc) {
-        var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
-        if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
-        else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
-        return c > 3 && r && Object.defineProperty(target, key, r), r;
-    };
-
-    __param = function (paramIndex, decorator) {
-        return function (target, key) { decorator(target, key, paramIndex); }
-    };
-
-    __metadata = function (metadataKey, metadataValue) {
-        if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(metadataKey, metadataValue);
-    };
-
-    __awaiter = function (thisArg, _arguments, P, generator) {
-        return new (P || (P = Promise))(function (resolve, reject) {
-            function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
-            function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
-            function step(result) { result.done ? resolve(result.value) : new P(function (resolve) { resolve(result.value); }).then(fulfilled, rejected); }
-            step((generator = generator.apply(thisArg, _arguments || [])).next());
-        });
-    };
-
-    __generator = function (thisArg, body) {
-        var _ = { label: 0, sent: function() { if (t[0] & 1) throw t[1]; return t[1]; }, trys: [], ops: [] }, f, y, t, g;
-        return g = { next: verb(0), "throw": verb(1), "return": verb(2) }, typeof Symbol === "function" && (g[Symbol.iterator] = function() { return this; }), g;
-        function verb(n) { return function (v) { return step([n, v]); }; }
-        function step(op) {
-            if (f) throw new TypeError("Generator is already executing.");
-            while (_) try {
-                if (f = 1, y && (t = y[op[0] & 2 ? "return" : op[0] ? "throw" : "next"]) && !(t = t.call(y, op[1])).done) return t;
-                if (y = 0, t) op = [0, t.value];
-                switch (op[0]) {
-                    case 0: case 1: t = op; break;
-                    case 4: _.label++; return { value: op[1], done: false };
-                    case 5: _.label++; y = op[1]; op = [0]; continue;
-                    case 7: op = _.ops.pop(); _.trys.pop(); continue;
-                    default:
-                        if (!(t = _.trys, t = t.length > 0 && t[t.length - 1]) && (op[0] === 6 || op[0] === 2)) { _ = 0; continue; }
-                        if (op[0] === 3 && (!t || (op[1] > t[0] && op[1] < t[3]))) { _.label = op[1]; break; }
-                        if (op[0] === 6 && _.label < t[1]) { _.label = t[1]; t = op; break; }
-                        if (t && _.label < t[2]) { _.label = t[2]; _.ops.push(op); break; }
-                        if (t[2]) _.ops.pop();
-                        _.trys.pop(); continue;
-                }
-                op = body.call(thisArg, _);
-            } catch (e) { op = [6, e]; y = 0; } finally { f = t = 0; }
-            if (op[0] & 5) throw op[1]; return { value: op[0] ? op[1] : void 0, done: true };
-        }
-    };
-
-    __exportStar = function (m, exports) {
-        for (var p in m) if (!exports.hasOwnProperty(p)) exports[p] = m[p];
-    };
-
-    __values = function (o) {
-        var m = typeof Symbol === "function" && o[Symbol.iterator], i = 0;
-        if (m) return m.call(o);
-        return {
-            next: function () {
-                if (o && i >= o.length) o = void 0;
-                return { value: o && o[i++], done: !o };
-            }
-        };
-    };
-
-    __read = function (o, n) {
-        var m = typeof Symbol === "function" && o[Symbol.iterator];
-        if (!m) return o;
-        var i = m.call(o), r, ar = [], e;
-        try {
-            while ((n === void 0 || n-- > 0) && !(r = i.next()).done) ar.push(r.value);
-        }
-        catch (error) { e = { error: error }; }
-        finally {
-            try {
-                if (r && !r.done && (m = i["return"])) m.call(i);
-            }
-            finally { if (e) throw e.error; }
-        }
-        return ar;
-    };
-
-    __spread = function () {
-        for (var ar = [], i = 0; i < arguments.length; i++)
-            ar = ar.concat(__read(arguments[i]));
-        return ar;
-    };
-
-    __asyncGenerator = function (thisArg, _arguments, generator) {
-        if (!Symbol.asyncIterator) throw new TypeError("Symbol.asyncIterator is not defined.");
-        var g = generator.apply(thisArg, _arguments || []), q = [], c, i;
-        return i = { next: verb("next"), "throw": verb("throw"), "return": verb("return") }, i[Symbol.asyncIterator] = function () { return this; }, i;
-        function verb(n) { return function (v) { return new Promise(function (a, b) { q.push([n, v, a, b]), next(); }); }; }
-        function next() { if (!c && q.length) resume((c = q.shift())[0], c[1]); }
-        function resume(n, v) { try { step(g[n](v)); } catch (e) { settle(c[3], e); } }
-        function step(r) { r.done ? settle(c[2], r) : r.value[0] === "yield" ? settle(c[2], { value: r.value[1], done: false }) : Promise.resolve(r.value[1]).then(r.value[0] === "delegate" ? delegate : fulfill, reject); }
-        function delegate(r) { step(r.done ? r : { value: ["yield", r.value], done: false }); }
-        function fulfill(value) { resume("next", value); }
-        function reject(value) { resume("throw", value); }
-        function settle(f, v) { c = void 0, f(v), next(); }
-    };
-
-    __asyncDelegator = function (o) {
-        var i = { next: verb("next"), "throw": verb("throw", function (e) { throw e; }), "return": verb("return", function (v) { return { value: v, done: true }; }) };
-        return o = __asyncValues(o), i[Symbol.iterator] = function () { return this; }, i;
-        function verb(n, f) { return function (v) { return { value: ["delegate", (o[n] || f).call(o, v)], done: false }; }; }
-    };
-
-    __asyncValues = function (o) {
-        if (!Symbol.asyncIterator) throw new TypeError("Symbol.asyncIterator is not defined.");
-        var m = o[Symbol.asyncIterator];
-        return m ? m.call(o) : typeof __values === "function" ? __values(o) : o[Symbol.iterator]();
-    };
-
-    exporter("__extends", __extends);
-    exporter("__assign", __assign);
-    exporter("__rest", __rest);
-    exporter("__decorate", __decorate);
-    exporter("__param", __param);
-    exporter("__metadata", __metadata);
-    exporter("__awaiter", __awaiter);
-    exporter("__generator", __generator);
-    exporter("__exportStar", __exportStar);
-    exporter("__values", __values);
-    exporter("__read", __read);
-    exporter("__spread", __spread);
-    exporter("__asyncGenerator", __asyncGenerator);
-    exporter("__asyncDelegator", __asyncDelegator);
-    exporter("__asyncValues", __asyncValues);
+},{}]},{},[8])(8)
 });
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}]},{},[6])(6)
-});
+
+
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
 },{}],3:[function(_dereq_,module,exports){
 'use strict';

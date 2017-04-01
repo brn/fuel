@@ -14,21 +14,38 @@ import {
 import {
   expect
 } from 'chai';
+import {
+  domOps
+} from '../domops';
 
 
 describe('FuelDOM', () => {
   let dom;
 
   beforeEach(() => {
+    domOps.resetId();
     dom = document.body.appendChild(document.createElement('div'));
   });
 
   afterEach(() => {
+    domOps.resetId();
     dom && dom.parentNode.removeChild(dom);
   });
   
-  describe('@render()', () => {    
-    it('render first dom node', done => {
+  describe('@render()', () => {
+    it('should throw if non html element is passed', () => {
+      expect(() => FuelDOM.render(<div />, {} as any)).throw(Error);
+    });
+
+    it('should throw if text node is passed', () => {
+      expect(() => FuelDOM.render(<div />, document.createTextNode('test'))).throw(Error);
+    });
+
+    it('should throw if external element has ref', () => {
+      expect(() => FuelDOM.render(<div ref="foo"/>, dom)).throw(Error);
+    });
+
+    it('should render first dom node', done => {
       FuelDOM.render(<div><span>foobarbaz</span></div>, dom, (tree: HTMLElement) => {
         expect(tree.tagName).to.be.eq('DIV');
         expect(tree.firstElementChild.tagName).to.be.eq('SPAN');
@@ -37,7 +54,7 @@ describe('FuelDOM', () => {
       });
     });
 
-    it('set style 1', done => {
+    it('should set style 1', done => {
       FuelDOM.render(<div style={{width: 100, height: 100, backgroundColor: '#0099FF'}}></div>, dom, (tree: HTMLElement) => {
         const {style} = tree;
         expect(style.width).to.be.eq('100px');
@@ -47,7 +64,7 @@ describe('FuelDOM', () => {
       });
     });
 
-    it('set style 2.', done => {
+    it('should set style 2.', done => {
       FuelDOM.render(<div style={{display: 'flex', flexGrow: 3, flexShrink: 2, flexDirection: 'column', flexWrap: 'nowrap'}}></div>, dom, (tree: HTMLElement) => {
         const {style} = tree;
         expect(style.display).to.be.eq('flex');
@@ -59,7 +76,7 @@ describe('FuelDOM', () => {
       });
     });
 
-    it('update style', done => {
+    it('should update style', done => {
       class Component extends Fuel.Component<any, any> {
         public state = {width: 100, height: 100};
         render() {
@@ -80,7 +97,7 @@ describe('FuelDOM', () => {
       });
     });
 
-    it('update context', done => {
+    it('should update context', done => {
       class ContextComponent extends Fuel.Component<any, any> {
         state = {className: 'context-class-name'}
         render() {
@@ -115,7 +132,7 @@ describe('FuelDOM', () => {
       });
     });
 
-    it('render only internal component', done => {
+    it('should render only internal component', done => {
       class Component extends Fuel.Component<any, any> {
         public state = {value: 2};
 
@@ -144,7 +161,7 @@ describe('FuelDOM', () => {
       });
     });
 
-    it('handle change event on input/textarea', () => {
+    it('should handle change event on input/textarea', () => {
       class A extends Fuel.Component<any, any> {
         state = {text: ''}
         render() {
@@ -154,6 +171,17 @@ describe('FuelDOM', () => {
           this.setState({text: e.target.value});
         }
       }
+    });
+
+    it('should skip rendering null', done => {
+      FuelDOM.render(<div><span>foo</span><span>bar</span></div>, dom, () => {
+        FuelDOM.render(<div><span>foo</span>{null}</div>, dom, (tree: HTMLElement) => {
+          const found = tree.querySelectorAll('div>span');
+          expect(found.length).to.be.eq(1);
+          expect(found[0].textContent).to.be.eq('foo');
+          done();
+        });
+      });
     });
   });
 })

@@ -16,11 +16,6 @@
  */
 
 
-import {
-  FuelDOMNode
-} from './type';
-
-
 export const PX_CONVERTIONS = {
   'width': 1,
   'height': 1,
@@ -66,6 +61,6 @@ export const PX_CONVERTIONS = {
 }
 
 
-export function setStyle(el: FuelDOMNode, name: string, value: any): void {
-  el.style[name] = typeof value === 'number' && PX_CONVERTIONS[name]? `${value}px`: String(value);
+export function setStyle(el: Node, name: string, value: any): void {
+  (el as HTMLElement).style[name] = typeof value === 'number' && PX_CONVERTIONS[name]? `${value}px`: String(value);
 }

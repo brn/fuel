@@ -19,158 +19,83 @@ import {
   FuelElement,
   FuelComponent,
   FuelComponentStatic,
-  Stem,
-  FuelDOMNode
+  Stem
 } from './type';
 import {
-  FuelElementView
+  FuelElementView,
+  createTextNode,
+  makeFragment,
+  FLY_WEIGHT_ELEMENT_A,
+  FLY_WEIGHT_FRAGMENT_A,
+  wrapNode
 } from './element';
 import {
-  Renderer
-} from './renderer/renderer';
-import {
   invariant,
-  requestIdleCallback
+  requestIdleCallback,
+  typeOf,
+  isDefined
 } from './util'
+import {
+  ElementForest,
+  makeForest,
+  FORESET_SENTINEL
+} from './forest';
+import {
+  domOps
+} from './domops';
 
 
-type FastDomTreeStackType = {
-  element: FuelElement,
-  parentElement: FuelElement,
-  children: FuelElement[],
-  dom: FuelDOMNode,
-  parent: FuelDOMNode,
-  root: FuelElement,
-  context: any;
-  childrenIndex: number
-};
+const {
+  isComponent,
+  createDomElement,
+  instantiateComponent,
+  isFuelElement,
+  isFragment,
+  isTextNode,
+  isDisposed,
+  getTextValueOf
+} = FuelElementView;
 
 
-function makeInitialDomTreeStack(context: any, fuelElement: FuelElement): FastDomTreeStackType[] {
-  return [
-    {
-      element: fuelElement,
-      parentElement: null,
-      children: fuelElement.children.slice(),
-      dom: fuelElement.dom,
-      parent: null,
-      root: fuelElement._ownerElement,
-      context,
-      childrenIndex: 0
-    }
-  ]
+const enum TextInsertionState {
+  LAST_NODE_IS_TEXT = 1,
+  ELEMENT_INSERTED = 2
 }
 
 
-export function fastCreateDomTree(
-  context: any,
-  fuelElement: FuelElement,
-  renderer: Renderer,
-  createStem: () => Stem) {
-  let createdDomTreeRoot: FuelDOMNode;
-
-  while (fuelElement && FuelElementView.isComponent(fuelElement)) {
-    [fuelElement, context] = renderComponent(context, fuelElement, createStem);
+const wrap = wrapNode;
+export function fastCreateDomTree(context: any, element: FuelElement, createStem: () => Stem, fragment: Node = null) {
+  while (isComponent(element)) {
+    [element, context] = instantiateComponent(context, element, createStem);
   }
 
-  if (!fuelElement) {
-    return;
+  if (element) {
+    const dom = createDomElement(element._ownerElement, element, createStem);
+    const {children} = element;
+    const {length} = children;
+    let flags = 0 | 0;
+    let cursor = 0;
+
+    if (fragment) {fragment.appendChild(dom);}
+
+    while (length > cursor) {
+      const el: FuelElement|string|number|(any[]) = children[cursor++];
+      if (isFuelElement(el) || Array.isArray(el)) {
+        flags = TextInsertionState.ELEMENT_INSERTED;
+        dom.appendChild(fastCreateDomTree(context, wrap(null, el, FLY_WEIGHT_ELEMENT_A, FLY_WEIGHT_FRAGMENT_A), createStem));
+      } else if ((flags & TextInsertionState.LAST_NODE_IS_TEXT) > 0) {
+        dom.lastChild.nodeValue += `${el}`;
+      } else if ((flags & TextInsertionState.ELEMENT_INSERTED) === 0) {
+        flags |= TextInsertionState.LAST_NODE_IS_TEXT;
+        dom.textContent += `${el}`;
+      } else {
+        flags |= TextInsertionState.LAST_NODE_IS_TEXT;
+        dom.appendChild(domOps.newTextNode(`${el}`));
+      }
+    }
+  } else {
+    return domOps.newFragment();
   }
 
-  const stack = makeInitialDomTreeStack(context || {}, fuelElement);
-
-
-  LOOP: while (stack.length) {
-    const next = stack.pop();
-    const hasChildren = next.children.length > next.childrenIndex;
-
-    if (!next.dom) {
-
-      const {element, parentElement, parent} = next;
-
-      if (element.key && next.parentElement) {
-        if (!parentElement._keymap) {
-          parentElement._keymap = {};
-        }
-        invariant(parentElement._keymap[element.key], `Duplicate key found: key = ${element.key}`);
-        parentElement._keymap[element.key] = element;
-      }
-
-      next.dom = FuelElementView.createDomElement(next.root, element, renderer, createStem);
-
-      if (!createdDomTreeRoot) {
-        createdDomTreeRoot = next.dom;
-      }
-
-      if (parent) {
-        parent.appendChild(next.dom);
-        FuelElementView.invokeDidMount(next.element);
-      }
-    }
-
-    let root = next.root;
-    if (hasChildren) {
-      stack.push(next);
-      let child = next.children[next.childrenIndex++];
-
-      if (child._stem) {
-        root = child;
-      }
-
-      let {context} = next;
-      while (FuelElementView.isComponent(child)) {
-        root = child;
-        child._ownerElement = next.element._ownerElement;
-        [child, context] = renderComponent(context, child, createStem);
-        if (!child) {
-          continue LOOP;
-        }
-      }
-      if (!child._ownerElement) {
-        child._ownerElement = next.element._ownerElement;
-      }
-      stack.push({element: child, children: child.children, dom: null, parent: next.dom, parentElement: next.element, root, context, childrenIndex: 0});
-    }
-  }
-  return createdDomTreeRoot;
-}
-
-
-function renderComponent(oldContext: any, fuelElement: FuelElement, createStem: () => Stem) {
-  const [nodes, context] = FuelElementView.instantiateComponent(oldContext, fuelElement, null);
-  if (nodes) {
-    fuelElement._stem.registerOwner(fuelElement);
-  }
-  return [nodes, context];
-}
-
-
-export function cleanupTree(fuelElement: FuelElement, cb?: () => void) {
-  doClean(fuelElement, cb);
-//  requestIdleCallback(() => doClean(fuelElement, cb));
-}
-
-
-function doClean(fuelElement: FuelElement, cb?: () => void) {
-  const stack = [
-    {
-      element: fuelElement,
-      children: fuelElement.children.slice()
-    }
-  ];
-
-  while (stack.length) {
-    const next = stack.pop();
-    if (!next.element._unmounted) {
-      FuelElementView.cleanupElement(next.element);
-    }
-    if (next.children.length) {
-      stack.push(next);
-      const child = next.children.shift();
-      if (child) {
-        stack.push({element: child, children: child.children.slice()});
-      }
-    }
-  }
-  cb && cb();
+  return fragment || element.dom;
 }

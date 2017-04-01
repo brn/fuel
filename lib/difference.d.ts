@@ -14,44 +14,13 @@
  * @fileoverview
  * @author Taketoshi Aono
  */
-import { FuelElement } from './type';
-export declare const enum DifferenceBits {
-    CREATE_CHILDREN = 1,
-    NEW_ELEMENT = 2,
-    REMOVE_ELEMENT = 4,
-    REPLACE_ELEMENT = 8,
-    TEXT_CHANGED = 16,
+import { FuelElement, KeyMap, PatchOps, MoveType } from './type';
+export declare function compare(valueA: any, valueB: any): boolean;
+export declare function isStateUpdated(prev: any, next: any): boolean;
+export declare function compareStyle(prev: KeyMap<any>, next: KeyMap<any>): [KeyMap<string>, number];
+export declare const enum TraversalOp {
+    CONTINUE = 1,
+    SKIP_CURRENT_CHILDREN = 2,
+    SKIP_CURRENT_FORESET = 3,
 }
-export declare const enum AttrState {
-    NEW = 1,
-    REMOVED = 2,
-    REPLACED = 3,
-    UNCHANGED = 4,
-    STYLE_CHANGED = 5,
-}
-export interface PropsDiff {
-    value: any;
-    state: AttrState;
-}
-export interface AttrDiff {
-    key: string;
-    value: string;
-    state: AttrState;
-}
-export interface StyleDiff {
-    key: 'style';
-    value: {
-        [key: string]: string | number;
-    };
-    state: AttrState;
-}
-export interface Difference {
-    attr: (AttrDiff | StyleDiff)[];
-    flags: number;
-}
-export declare function isCreateChildren(diff: Difference): boolean;
-export declare function isNewElement(diff: Difference): boolean;
-export declare function isRemoveElement(diff: Difference): boolean;
-export declare function isReplaceElement(diff: Difference): boolean;
-export declare function isTextChanged(diff: Difference): boolean;
-export declare function diff(oldElement: FuelElement, newElement: FuelElement): Difference;
+export declare function diff(context: any, index: number, move: MoveType, parent: FuelElement, oldElement: FuelElement, newElement: FuelElement, patchOps: PatchOps): TraversalOp;

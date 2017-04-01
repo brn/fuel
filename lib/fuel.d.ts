@@ -18,26 +18,28 @@ import { PublicFuelElement, FuelElement, FuelComponent, StatelessComponent, Fuel
 export declare class ComponentImpl<Props, State> implements FuelComponent<Props, State> {
     private _props;
     private _context;
-    state: State;
+    private _state;
     constructor(_props?: Props, _context?: {});
     refs?: {
         [key: string]: FuelComponent<any, any> | Element;
     };
-    readonly ['props']: Props;
-    readonly ['context']: {};
-    ['componentWillUnmount'](): void;
-    ['componentWillMount'](): void;
-    ['componentDidMount'](): void;
-    ['componentWillUpdate'](): void;
-    ['componentDidUpdate'](): void;
-    ['componentWillReceiveProps'](props: Props): void;
-    ['shouldComponentUpdate'](nextProps: any, prevProps: any): boolean;
-    ['render'](): JSX.Element;
-    ['getChildContext']<CC extends {}>(): CC;
+    state: State;
+    readonly props: Props;
+    readonly context: {};
+    componentWillUnmount(): void;
+    componentWillMount(): void;
+    componentDidMount(): void;
+    componentWillUpdate(): void;
+    componentDidUpdate(): void;
+    componentWillReceiveProps(props: Props): void;
+    shouldComponentUpdate(nextProps: any, prevProps: any): boolean;
+    render(): JSX.Element;
+    getChildContext<CC extends {}>(): CC;
     /**
      * Will be rewrited after.
      */
-    ['setState'](state: State, cb?: () => void): void;
+    setState(state: State | ((currentState: State, props: Props) => State), cb?: () => void): void;
+    forceUpdate(cb?: () => void): void;
 }
 export declare class PureComponentImpl<Props, State> extends ComponentImpl<Props, State> {
     ['shouldComponentUpdate'](nextProps: any, prevProps: any): boolean;
@@ -53,12 +55,15 @@ export declare class Fuel {
      */
     static createElement<P extends {
         key?: string;
+        children: any[];
     }>(type: string, props: HTMLAttributes, ...children: FuelNode[]): FuelElement;
     static createElement<P extends {
         key?: string;
+        children: any[];
     }>(type: FuelComponentStatic<P, any>, props: P, ...children: FuelNode[]): FuelElement;
     static createElement<P extends {
         key?: string;
+        children: any[];
     }>(type: StatelessComponent<P>, props: P, ...children: FuelNode[]): FuelElement;
     static unmountComponentAtNode(el: Node): void;
     /**

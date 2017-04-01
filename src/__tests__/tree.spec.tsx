@@ -3,13 +3,10 @@
  * @author Taketoshi Aono
  */
 
-
+import "./type";
 import {
   fastCreateDomTree
 } from '../tree';
-import {
-  StringRenderer
-} from '../renderer/string-renderer';
 import {
   FuelStem
 } from '../stem';
@@ -20,14 +17,19 @@ import {
 import {
   expect
 } from 'chai';
-
+import {
+  domOps
+} from '../domops';
+import * as serialize from 'dom-serialize';
 
 describe('tree', () => {
   describe('fastCreateDomTree', () => {
-    let renderer;
     beforeEach(() => {
-      renderer = new StringRenderer(false);
-    });
+      domOps.resetId();
+    })
+    afterEach(() => {
+      domOps.resetId();
+    })
 
     class Component extends Fuel.Component<any, any> {
       render() {
@@ -94,8 +96,8 @@ describe('tree', () => {
           </ul>
         </div>
       );
-      fastCreateDomTree({}, el, renderer, () => new FuelStem());
-      expect(el.dom.toString()).to.be.eq('<div><ul><li><span>text</span></li><li><span>text2</span></li><li><span><a href="javascript:void(0)">text3</a></span></li><li><table><thead><tr><th>header1</th><th>header2</th><th>header3</th></tr></thead><tbody><tr><td>body1</td><td>body2</td><td>boy3</td></tr></tbody></table></li></ul></div>');
+      fastCreateDomTree({}, el, () => new FuelStem());
+      expect(serialize(el.dom)).to.be.eq('<div data-id="0"><ul data-id="0"><li data-id="0"><span data-id="0">text</span></li><li data-id="0"><span data-id="0">text2</span></li><li data-id="0"><span data-id="0"><a data-id="0" href="javascript:void(0)">text3</a></span></li><li data-id="0"><table data-id="0"><thead data-id="0"><tr data-id="0"><th data-id="0">header1</th><th data-id="0">header2</th><th data-id="0">header3</th></tr></thead><tbody data-id="0"><tr data-id="0"><td data-id="0">body1</td><td data-id="0">body2</td><td data-id="0">boy3</td></tr></tbody></table></li></ul></div>');
     });
 
     it('create dom tree contains component', () => {
@@ -111,8 +113,8 @@ describe('tree', () => {
           </ul>
         </div>
       );
-      fastCreateDomTree({}, el, renderer, () => new FuelStem());
-      expect(el.dom.toString()).to.be.eq('<div><ul><li><span>text</span></li><li><span>text2</span></li><li><span><a href="javascript:void(0)">text3</a></span></li><li><table><thead><tr><th>header1</th><th>header2</th><th>header3</th></tr></thead><tbody><tr><td>body1</td><td>body2</td><td>boy3</td></tr></tbody></table></li></ul></div>');
+      fastCreateDomTree({}, el, () => new FuelStem());
+      expect(serialize(el.dom)).to.be.eq('<div data-id="0"><ul data-id="0"><li data-id="0"><span data-id="0">text</span></li><li data-id="0"><span data-id="0">text2</span></li><li data-id="0"><span data-id="0"><a data-id="0" href="javascript:void(0)">text3</a></span></li><li data-id="0"><table data-id="0"><thead data-id="0"><tr data-id="0"><th data-id="0">header1</th><th data-id="0">header2</th><th data-id="0">header3</th></tr></thead><tbody data-id="0"><tr data-id="0"><td data-id="0">body1</td><td data-id="0">body2</td><td data-id="0">boy3</td></tr></tbody></table></li></ul></div>');
     });
 
     it('create dom tree contains nested component', () => {
@@ -128,8 +130,8 @@ describe('tree', () => {
           </ul>
         </div>
       );
-      fastCreateDomTree({}, el, renderer, () => new FuelStem());
-      expect(el.dom.toString()).to.be.eq('<div><ul><li><span>text</span></li><li><span>text2</span></li><li><span><a href="javascript:void(0)">text3</a></span></li><li><table><thead><tr><th>header1</th><th>header2</th><th>header3</th></tr></thead><tbody><tr><td>body1</td><td>body2</td><td>boy3</td></tr></tbody></table></li></ul></div>');
+      fastCreateDomTree({}, el, () => new FuelStem());
+      expect(serialize(el.dom)).to.be.eq('<div data-id="0"><ul data-id="0"><li data-id="0"><span data-id="0">text</span></li><li data-id="0"><span data-id="0">text2</span></li><li data-id="0"><span data-id="0"><a data-id="0" href="javascript:void(0)">text3</a></span></li><li data-id="0"><table data-id="0"><thead data-id="0"><tr data-id="0"><th data-id="0">header1</th><th data-id="0">header2</th><th data-id="0">header3</th></tr></thead><tbody data-id="0"><tr data-id="0"><td data-id="0">body1</td><td data-id="0">body2</td><td data-id="0">boy3</td></tr></tbody></table></li></ul></div>');
     });
 
     it('create dom tree contains nested component 2', () => {
@@ -145,8 +147,8 @@ describe('tree', () => {
           </ul>
         </div>
       );
-      fastCreateDomTree({}, el, renderer, () => new FuelStem());
-      expect(el.dom.toString()).to.be.eq('<div><ul><li><span>text</span></li><li><span>text2</span></li><li><span><a href="javascript:void(0)">text3</a></span></li><li><div><table><thead><tr><th>header1</th><th>header2</th><th>header3</th></tr></thead><tbody><tr><td>body1</td><td>body2</td><td>boy3</td></tr></tbody></table></div></li></ul></div>');
+      fastCreateDomTree({}, el, () => new FuelStem());
+      expect(serialize(el.dom)).to.be.eq('<div data-id="0"><ul data-id="0"><li data-id="0"><span data-id="0">text</span></li><li data-id="0"><span data-id="0">text2</span></li><li data-id="0"><span data-id="0"><a data-id="0" href="javascript:void(0)">text3</a></span></li><li data-id="0"><div data-id="0"><table data-id="0"><thead data-id="0"><tr data-id="0"><th data-id="0">header1</th><th data-id="0">header2</th><th data-id="0">header3</th></tr></thead><tbody data-id="0"><tr data-id="0"><td data-id="0">body1</td><td data-id="0">body2</td><td data-id="0">boy3</td></tr></tbody></table></div></li></ul></div>');
     });
 
     class ChildrenComponent extends Fuel.Component<any ,any> {
@@ -159,8 +161,8 @@ describe('tree', () => {
 
     it('create dom tree contains children', () => {
       const el = <div><ChildrenComponent><span>foo-bar-baz</span></ChildrenComponent></div>;
-      fastCreateDomTree({}, el, renderer, () => new FuelStem());
-      expect(el.dom.toString()).to.be.eq('<div><div><span>foo-bar-baz</span></div></div>');
+      fastCreateDomTree({}, el, () => new FuelStem());
+      expect(serialize(el.dom)).to.be.eq('<div data-id="0"><div data-id="0"><span data-id="0">foo-bar-baz</span></div></div>');
     });
 
 
@@ -186,8 +188,8 @@ describe('tree', () => {
 
     it('create context.', () => {
       const el = <div><ContextComponent><div><ChildComponent/></div></ContextComponent></div>;
-      fastCreateDomTree({}, el, renderer, () => new FuelStem());
-      expect(el.dom.toString()).to.be.eq('<div><div><div><span class="context-class-name"></span></div></div></div>');
+      fastCreateDomTree({}, el, () => new FuelStem());
+      expect(serialize(el.dom)).to.be.eq('<div data-id="0"><div data-id="0"><div data-id="0"><span data-id="0" class="context-class-name"></span></div></div></div>');
     });
   });
 });

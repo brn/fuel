@@ -32,12 +32,13 @@ export const Symbol = typeof g.Symbol === 'function'? g.Symbol: (() => {
   }
 })();
 
-export function invariant(condition: any, message: string, warn = false) {
+export function invariant(condition: any, message: string|(() => string), warn = false) {
   if (condition) {
+    const m = typeof message === 'function'? message(): message;
     if (!warn) {
-      throw new Error(message);
+      throw new Error(m);
     } else {
-      console.warn(message);
+      console.warn(m);
     }
   }
 }
@@ -53,8 +54,19 @@ export function merge<T extends {[key: string]: any}, U extends {[key: string]: 
   return ret;
 }
 
+const {toString} = Object.prototype;
+const oReg = /\[object ([^\]]+)\]/;
+export function typeOf(a: any): string {
+  return toString.call(a).match(oReg)[1].toLowerCase();
+}
+
 const HAS_REQUEST_ANIMATION_FRAME = typeof g.requestAnimationFrame === 'function';
 export const requestAnimationFrame = HAS_REQUEST_ANIMATION_FRAME? cb => g.requestAnimationFrame(cb): cb => setTimeout(cb, 60)
 
 const HAS_REQUEST_IDLE_CALLBACK = typeof g['requestIdleCallback'] === 'function';
 export const requestIdleCallback = HAS_REQUEST_IDLE_CALLBACK? cb => g['requestIdleCallback'](cb): cb => cb();
+
+export function isDefined(a) {
+  return a !== null && a !== undefined;
+}
+export const keyList = Object.keys;

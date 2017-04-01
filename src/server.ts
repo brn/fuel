@@ -17,11 +17,19 @@
 
 
 import {
-  FuelDOMNode
-} from '../type';
+  FuelElement
+} from './type';
+import {
+  FuelElementView
+} from './element';
 
-export interface Renderer {
-  createElement(tagName: string): FuelDOMNode;
-  createTextNode(text: string): FuelDOMNode;
-  updateId(): void;
+
+export const FuelDOMServer = {
+  renderToString(element: FuelElement): string {
+    return FuelElementView.toStringTree(element, true);
+  },
+
+  renderToStaticMarkup(element: FuelElement) {
+    return FuelElementView.toStringTree(element, false);
+  }
 }

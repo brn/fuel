@@ -39,6 +39,7 @@ const enum Flags {
   WILL_UNMOUNT = 0x00000010
 }
 
+function createStem() {return new FuelStem()}
 
 class Component extends Fuel.Component<any, any> {
   public flags = 0;
@@ -56,31 +57,15 @@ class Component2 extends Fuel.Component<any, any> {
 }
 
 
-describe('element', () => {
+describe.skip('element', () => {
   beforeEach(() => {
     Component.constructed = 0;
   });
   describe('FuelElementView', () => {
-    describe('@allocateTextTagName', () => {
-      it('return text tag name(constant 0)', () => {
-        expect(FuelElementView.allocateTextTagName()).to.be.eq(0);
-        expect(FuelElementView.allocateTextTagName()).to.be.eq(0);
-      });
-    });
-
-    describe('@allocateTagName', () => {
-      it('return tagName id from tag name pool', () => {
-        const divId = FuelElementView.allocateTagName('div');
-        const spanId = FuelElementView.allocateTagName('span');
-        expect(FuelElementView.allocateTagName('div')).to.be.eq(divId);
-        expect(FuelElementView.allocateTagName('span')).to.be.eq(spanId);
-      })
-    });
-
     describe('@isComponent', () => {
       it('check whether element is component or not', () => {
         const componentEl = makeFuelElement(Component, null, [])
-        const el          = makeFuelElement(2, null, [])
+        const el          = makeFuelElement('div', null, [])
         componentEl._stem = new FuelStem();
         expect(FuelElementView.isComponent(componentEl)).to.be.true;
         expect(FuelElementView.isComponent(el)).to.be.false;
@@ -91,7 +76,7 @@ describe('element', () => {
       it('check whether element is statelessComponent or not', () => {
         const componentEl = makeFuelElement(Component, null, [])
         const stlessEl    = makeFuelElement(() => null, null, [])
-        const el          = makeFuelElement(2, null, [])
+        const el          = makeFuelElement('div', null, [])
         componentEl._stem = new FuelStem();
         expect(FuelElementView.isStatelessComponent(componentEl)).to.be.false;
         expect(FuelElementView.isStatelessComponent(stlessEl)).to.be.true;
@@ -101,10 +86,8 @@ describe('element', () => {
 
     describe('@tagNameOf', () => {
       it('get tag name of element', () => {
-        const divId  = FuelElementView.allocateTagName('div');
-        const spanId = FuelElementView.allocateTagName('span');
-        const div    = makeFuelElement(divId, null, []);
-        const span   = makeFuelElement(spanId, null, []);
+        const div    = makeFuelElement('div', null, []);
+        const span   = makeFuelElement('span', null, []);
         expect(FuelElementView.tagNameOf(div)).to.be.eq('div');
         expect(FuelElementView.tagNameOf(span)).to.be.eq('span');
       })
@@ -112,9 +95,9 @@ describe('element', () => {
 
     describe('@hasChildren', () => {
       it('return whether element has children or not', () => {
-        const el            = makeFuelElement(1, null, [], []);
-        const hasChildrenEl = makeFuelElement(1, null, [], [
-          makeFuelElement(2, null, [], [])
+        const el            = makeFuelElement('div', null, [], []);
+        const hasChildrenEl = makeFuelElement('div', null, [], [
+          makeFuelElement('div', null, [], [])
         ]);
         expect(FuelElementView.hasChildren(el)).to.be.false;
         expect(FuelElementView.hasChildren(hasChildrenEl)).to.be.true;
@@ -123,8 +106,8 @@ describe('element', () => {
 
     describe('@isTextNode', () => {
       it('return whether element is text node or not.', () => {
-        const el     = makeFuelElement(1, null, [], []);
-        const textEl = makeFuelElement(0, null, [{name: 'text', value: 'text'}]);
+        const el     = makeFuelElement('div', null, [], []);
+        const textEl = makeFuelElement('SYNTHETIC_TEXT', null, [{name: 'text', value: 'text'}]);
         expect(FuelElementView.isTextNode(el)).to.be.false;
         expect(FuelElementView.isTextNode(textEl)).to.be.true;
       });
@@ -132,20 +115,19 @@ describe('element', () => {
 
     describe('@getTextValueOf', () => {
       it('return text element value.', () => {
-        const textEl = makeFuelElement(0, null, [{name: 'text', value: 'textValue'}]);
+        const textEl = makeFuelElement('SYNTHETIC_TEXT', null, [{name: 'text', value: 'textValue'}]);
         expect(FuelElementView.getTextValueOf(textEl)).to.be.eq('textValue');
       });
     });
 
     describe('@getComponentRenderedTree', () => {
       it('return rendered tree of component.', () => {
-        const divId = FuelElementView.allocateTagName('div');
         const el = makeFuelElement(Component, null, []);
         el._stem = new FuelStem();
-        FuelElementView.instantiateComponent({}, el, null);
+        FuelElementView.instantiateComponent({}, el, createStem);
         const tree = FuelElementView.getComponentRenderedTree(el);
         expect(tree).to.be.deep.equal({
-          type                               : divId,
+          type                               : 'div',
           key                                : null,
           props                              : [{name: 'className', value: 'rendered-tree'}],
           dom                                : null,
@@ -163,7 +145,7 @@ describe('element', () => {
       it('invoke component lifecycle hook', () => {
         const el = makeFuelElement(Component, null, []);
         el._stem = new FuelStem();
-        FuelElementView.instantiateComponent({}, el, null);
+        FuelElementView.instantiateComponent({}, el, createStem);
         const instance: Component = el._componentInstance as any;
         FuelElementView.invokeDidMount(el);
         expect(instance.flags & Flags.DID_MOUNT).to.be.eq(Flags.DID_MOUNT);
@@ -172,49 +154,13 @@ describe('element', () => {
         FuelElementView.invokeWillUnmount(el);
         expect(instance.flags & Flags.WILL_UNMOUNT).to.be.eq(Flags.WILL_UNMOUNT);
       });
-    })
-
-    describe('@getProps', () => {
-      it('return props as object.', () => {
-        const el = makeFuelElement(1, null, [{name: 'className', value: 'test-classname'}, {name: 'id', value: 'test-id'}]);
-        expect(el.props).to.be.deep.equal({
-          className: 'test-classname',
-          id: 'test-id'
-        });
-      });
-
-      it('return props with children.', () => {
-        const divId = FuelElementView.allocateTagName('div');
-        const el = makeFuelElement(divId, null, [{name: 'className', value: 'test-classname'}, {name: 'id', value: 'test-id'}], [
-          makeFuelElement(divId, null, [])
-        ]);
-        expect(el.props).to.be.deep.equal({
-          className: 'test-classname',
-          id: 'test-id',
-          children: [
-            {
-              type                               : divId,
-              key                                : null,
-              props                              : [],
-              dom                                : null,
-              _stem                              : null,
-              _componentInstance                 : null,
-              _componentRenderedElementTreeCache : null,
-              _keymap                            : null,
-              _subscriptions                     : null,
-              children                           : []
-            }
-          ]
-        });
-      });
     });
 
     describe('@instantiateComponent', () => {
       it('instantiate FuelComponent', () => {
-        const divId = FuelElementView.allocateTagName('div');
         const el = makeFuelElement(Component2, null, [{name: 'className', value: 'test'}]);
         el._stem = new FuelStem();
-        const [rendered] = FuelElementView.instantiateComponent({}, el, null);
+        const [rendered] = FuelElementView.instantiateComponent({}, el, createStem);
 
         expect(el).to.be.deep.eq({
           type                               : Component2,
@@ -230,7 +176,7 @@ describe('element', () => {
         });
 
         expect(rendered).to.be.deep.eq({
-          type                               : divId,
+          type                               : 'div',
           key                                : null,
           props                              : [{name: 'className', value: 'test'}],
           dom                                : null,
@@ -248,18 +194,17 @@ describe('element', () => {
         const el = makeFuelElement(Component, null, [{name: 'className', value: 'test'}]);
         el._stem = new FuelStem();
         expect(Component.constructed).to.be.eq(0);
-        FuelElementView.instantiateComponent({}, el, null);
-        FuelElementView.instantiateComponent({}, el, null);
-        FuelElementView.instantiateComponent({}, el, null);
+        FuelElementView.instantiateComponent({}, el, createStem);
+        FuelElementView.instantiateComponent({}, el, createStem);
+        FuelElementView.instantiateComponent({}, el, createStem);
         expect(Component.constructed).to.be.eq(1);
       });
 
 
       it('instantiate StatelessComponent', () => {
-        const divId = FuelElementView.allocateTagName('div');
         const fn = ({className}) => {return <div className={className}></div>};
         const el = makeFuelElement(fn, null, [{name: 'className', value: 'test'}]);
-        const [rendered] = FuelElementView.instantiateComponent({}, el, null);
+        const [rendered] = FuelElementView.instantiateComponent({}, el, createStem);
 
         expect(el).to.be.deep.eq({
           type                               : fn,
@@ -275,7 +220,7 @@ describe('element', () => {
         });
 
         expect(rendered).to.be.deep.eq({
-          type                               : divId,
+          type                               : 'div',
           key                                : null,
           props                              : [{name: 'className', value: 'test'}],
           dom                                : null,
@@ -293,11 +238,11 @@ describe('element', () => {
 
   describe('makeFuelElement', () => {
     it('create element', () => {
-      const el = makeFuelElement(0, 'key', [{name: 'prop', value: 'test'}], [
+      const el = makeFuelElement('div', 'key', [{name: 'prop', value: 'test'}], [
         makeFuelElement(1, 'key', [])
       ]);
       expect(el).to.be.deep.equal({
-        type                               : 0,
+        type                               : 'div',
         key                                : 'key',
         props                              : [{name: 'prop', value: 'test'}],
         dom                                : null,
@@ -327,11 +272,11 @@ describe('element', () => {
 
   describe('cloneElement', () => {
     it('clone element', () => {
-      const el = makeFuelElement(0, 'key', [{name: 'prop', value: 'test'}], [
+      const el = makeFuelElement('div', 'key', [{name: 'prop', value: 'test'}], [
         makeFuelElement(1, 'key', [])
       ]);
       expect(cloneElement(el, {className: 'test'})).to.be.deep.equal({
-        type                               : 0,
+        type                               : 'div',
         key                                : 'key',
         props                              : [{name: 'prop', value: 'test'}, {name: 'className', value: 'test'}],
         dom                                : null,
