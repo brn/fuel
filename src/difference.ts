@@ -18,88 +18,30 @@
 import {
   FuelElement,
   Property,
-  KeyMap
+  KeyMap,
+  PatchOps,
+  DOMEvents,
+  MoveType
 } from './type';
 import {
   FuelElementView
 } from './element';
+import {
+  typeOf,
+  keyList
+} from './util';
+import {
+  setStyle
+} from './node';
 
-export const enum DifferenceBits {
-  CREATE_CHILDREN      = 0x00000001,
-  NEW_ELEMENT          = 0x00000002,
-  REMOVE_ELEMENT       = 0x00000004,
-  REPLACE_ELEMENT      = 0x00000008,
-  TEXT_CHANGED         = 0x00000010
-}
-
-
-export const enum AttrState {
-  NEW = 1,
-  REMOVED,
-  REPLACED,
-  UNCHANGED,
-  STYLE_CHANGED
-}
-
-
-export interface PropsDiff {
-  value: any;
-  state: AttrState;
-}
-
-
-export interface AttrDiff {
-  key: string;
-  value: string;
-  state: AttrState;
-}
-
-
-export interface StyleDiff {
-  key: 'style';
-  value: {[key: string]: string|number};
-  state: AttrState;
-}
-
-
-export interface Difference {
-  attr: (AttrDiff|StyleDiff)[]
-  flags: number;
-}
-
-
-export function isCreateChildren(diff: Difference): boolean {
-  return (diff.flags & DifferenceBits.CREATE_CHILDREN) === DifferenceBits.CREATE_CHILDREN;
-}
-
-
-export function isNewElement(diff: Difference): boolean {
-  return (diff.flags & DifferenceBits.NEW_ELEMENT) === DifferenceBits.NEW_ELEMENT;
-}
-
-
-export function isRemoveElement(diff: Difference): boolean {
-  return (diff.flags & DifferenceBits.REMOVE_ELEMENT) === DifferenceBits.REMOVE_ELEMENT;
-}
-
-
-export function isReplaceElement(diff: Difference): boolean {
-  return (diff.flags & DifferenceBits.REPLACE_ELEMENT) === DifferenceBits.REPLACE_ELEMENT;
-}
-
-
-export function isTextChanged(diff: Difference): boolean {
-  return (diff.flags & DifferenceBits.TEXT_CHANGED) === DifferenceBits.TEXT_CHANGED;
-}
-
-
-function compare(valueA: any, valueB: any): boolean {
+export function compare(valueA: any, valueB: any): boolean {
   if (valueA === null) {
     if (valueB || valueB === undefined) {return false;}
     return true;
   }
 
-  const typeA = typeof valueA;
+  const typeA = typeOf(valueA);
+  const typeB = typeOf(valueB);
 
   if (typeA === 'number' && !isFinite(valueA)) {
     if (isFinite(valueB)) {
@@ -113,18 +55,63 @@ function compare(valueA: any, valueB: any): boolean {
     return true;
   }
 
-  if (typeA !== 'object' && typeof valueB !== 'object') {
-    return valueA === valueB;
+  if (typeA === 'date' && typeB === 'date') {
+    return valueA.toJSON() === valueB.toJSON();
+  } else if (typeA === 'regexp' && typeB === 'regexp') {
+    return valueA.toString() === valueB.toString();
   }
 
-  return false;
+  return valueA === valueB;
 }
 
 
-function compareStyle(prev: KeyMap<any>, next: KeyMap<any>): [KeyMap<string>, number] {
+export function isStateUpdated(prev: any, next: any): boolean {
+  const prevType = typeOf(prev);
+  const nextType = typeOf(next);
+  if (prevType !== nextType) {
+    return false;
+  }
+
+  if (prevType === nextType) {
+    return true;
+  }
+
+  if (prevType === 'array') {
+    const len = prev.length > next.length? prev.length: next.length;
+    for (let i = 0; i < len; i++) {
+      if (!compare(prev[i], next[i])) {
+        return false;
+      }
+    }
+    return false;
+  } else if (prevType === 'object') {
+    const prevKeys = keyList(prev)
+    const nextKeys = keyList(next);
+    const prevLen = prevKeys.length;
+    const nextLen = nextKeys.length;
+    if (prevLen !== nextLen) {return false;}
+    const len = prevLen > nextLen? prevLen: nextLen;
+    for (let i = 0; i < len; i++) {
+      const pv = prev[prevKeys[i]];
+      const nv = next[nextKeys[i]];
+      if (!compare(pv, nv)) {
+        return false;
+      }
+    }
+    return true;
+  }
+  return compare(prev, next);
+}
+
+
+export function compareStyle(prev: KeyMap<any>, next: KeyMap<any>): [KeyMap<string>, number] {
   const diff: KeyMap<string> = {} as any;
   const unchanged = {};
   let count = 0;
+
+  if (next === prev) {
+    return [diff, 0];
+  }
 
   for (const name in next) {
     let value = next[name];
@@ -135,7 +122,7 @@ function compareStyle(prev: KeyMap<any>, next: KeyMap<any>): [KeyMap<string>, nu
       unchanged[name] = 1;
     }
   }
-  const oldStyles = Object.keys(prev);
+  const oldStyles = keyList(prev);
   for (let i = 0, len = oldStyles.length; i < len; i++) {
     if (!diff[oldStyles[i]] && !unchanged[oldStyles[i]]) {
       diff[oldStyles[i]] = '';
@@ -147,84 +134,56 @@ function compareStyle(prev: KeyMap<any>, next: KeyMap<any>): [KeyMap<string>, nu
 }
 
 
-function checkProps(bufferSet: KeyMap<PropsDiff>, name: string, value: any, isOldProps: boolean) {
-  if (!bufferSet[name]) {
-    bufferSet[name] = {state: isOldProps? AttrState.REMOVED: AttrState.NEW, value};
-  } else if (name === 'style') {
-    const [diff, count] = compareStyle(bufferSet[name].value, value);
-    if (count) {
-      bufferSet[name] = {state: AttrState.REPLACED, value: diff};
-    }
-  } else if (!compare(bufferSet[name].value, value)) {
-    bufferSet[name] = {state: AttrState.REPLACED, value};
-  } else {
-    bufferSet[name].state = AttrState.UNCHANGED;
-  }
+const {stripComponent, isTextNode, getTextValueOf} = FuelElementView;
+
+export const enum TraversalOp {
+  CONTINUE = 1,
+  SKIP_CURRENT_CHILDREN,
+  SKIP_CURRENT_FORESET
 }
 
+export function diff(context: any, index: number, move: MoveType, parent: FuelElement, oldElement: FuelElement, newElement: FuelElement, patchOps: PatchOps): TraversalOp {
+  const isOnlyOneChild = parent? parent.children.length === 1: false;
+  const isNewElementTextNode = isTextNode(newElement);
+  const isOldElementTextNode = isTextNode(oldElement);
 
-export function diff(oldElement: FuelElement, newElement: FuelElement): Difference {
-  const oldProps = oldElement? oldElement.props: null;
-  const newProps = newElement? newElement.props: null;
-  const result: Difference = {
-    attr: [],
-    flags: 0
+  if (move !== MoveType.NONE) {
+    patchOps.move(index, move, oldElement);
   }
-  const bufferSet = {};
-  if (!oldElement && newElement) {
-    result.flags |= DifferenceBits.NEW_ELEMENT;
-    return result;
-  } else if (!newElement && oldElement) {
-    result.flags |= DifferenceBits.REMOVE_ELEMENT;
-    return result;
-  } else if (FuelElementView.isTextNode(oldElement) && FuelElementView.isTextNode(newElement)) {
-    if (FuelElementView.getTextValueOf(oldElement) !== FuelElementView.getTextValueOf(newElement)) {
-      result.flags |= DifferenceBits.TEXT_CHANGED;
+
+  if (oldElement === null && newElement) {
+    if (isNewElementTextNode && isOnlyOneChild) {
+      patchOps.setText(parent, newElement);
+      return TraversalOp.SKIP_CURRENT_FORESET;
+    } else if (isOnlyOneChild) {
+      patchOps.removeChildren(parent);
+      patchOps.append(context, parent, newElement);
+      return TraversalOp.SKIP_CURRENT_FORESET;
+    } else {
+      patchOps.insert(index, context, parent, newElement);
     }
-    return result;
+    return TraversalOp.SKIP_CURRENT_CHILDREN;
+  } else if (newElement === null && oldElement) {
+    patchOps.remove(index, parent, oldElement);
+    return TraversalOp.SKIP_CURRENT_CHILDREN;
+  } else if (isOldElementTextNode && isNewElementTextNode) {
+    if (getTextValueOf(oldElement) !== getTextValueOf(newElement)) {
+      patchOps.updateText(index, parent, newElement);
+    }
+    return TraversalOp.SKIP_CURRENT_CHILDREN;
   } else if (oldElement.type !== newElement.type) {
-    result.flags |= DifferenceBits.REPLACE_ELEMENT;
-  } else {
-    const newPropsKeys = Object.keys(newProps);
-    const oldPropsKeys = Object.keys(oldProps);
-    const newPropsLength = newPropsKeys.length;
-    const oldPropsLength = oldPropsKeys.length;
-    const keys = oldPropsLength > newPropsLength? oldPropsKeys: newPropsKeys;
-
-    for (let i = 0, len = oldPropsLength > newPropsLength? oldPropsLength: newPropsLength; i < len; i++) {
-      const key = keys[i];
-      if (key === 'children') {
-        continue;
-      }
-      if (oldProps[key] !== undefined) {
-        checkProps(bufferSet, key, oldProps[key], true);
-      }
-      if (newProps[key] !== undefined) {
-        checkProps(bufferSet, key, newProps[key], false);
-      }
-    }
-
-    for (const id in bufferSet) {
-      const buf = bufferSet[id];
-      switch (buf.state) {
-      case AttrState.UNCHANGED:
-        break;
-      default:
-        if (buf.state === AttrState.REPLACED) {
-          if (id === 'style') {
-            buf.state = AttrState.STYLE_CHANGED;
-          }
-        }
-        result.attr.push({key: id, value: buf.value, state: buf.state});
-      }
-    }
-  }
-  const isNewElementHasChildren = FuelElementView.hasChildren(newElement);
-  const isOldElementHasChildren = FuelElementView.hasChildren(oldElement);
-
-  if (isNewElementHasChildren && !isOldElementHasChildren) {
-    result.flags |= DifferenceBits.CREATE_CHILDREN;
+    patchOps.replace(index, parent, newElement, oldElement, context);
+    return TraversalOp.SKIP_CURRENT_CHILDREN;
+  } else if (!isNewElementTextNode) {
+    patchOps.update(newElement, oldElement);
   }
 
-  return result;
+  if ((newElement && newElement.children.length > 0) && (oldElement === null || oldElement.children.length === 0)) {
+    patchOps.createChildren(context, newElement);
+    return TraversalOp.SKIP_CURRENT_CHILDREN;
+  } else if (newElement && newElement.children.length === 0 && oldElement && oldElement.children.length > 0) {
+    patchOps.removeChildren(newElement);
+    return TraversalOp.SKIP_CURRENT_CHILDREN;
+  }
+  return TraversalOp.CONTINUE;
 }

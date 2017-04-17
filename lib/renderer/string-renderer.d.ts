@@ -14,13 +14,14 @@
  * @fileoverview
  * @author Taketoshi Aono
  */
-import { Renderer } from './renderer';
-import { FuelDOMNode } from '../type';
+import { FuelDOMNode, Renderer } from '../type';
 export declare class StringRenderer implements Renderer {
     private recordGeneration;
     private id;
     updateId(): void;
-    constructor(recordGeneration?: boolean);
+    static getInstance(): StringRenderer;
+    protected constructor(recordGeneration?: boolean);
     createElement(tagName: string): FuelDOMNode;
     createTextNode(text: string): FuelDOMNode;
+    createDocumentFragment(): FuelDOMNode;
 }

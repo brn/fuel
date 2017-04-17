@@ -16,9 +16,6 @@ import {
   FuelStem
 } from '../stem';
 import {
-  StringRenderer
-} from '../renderer/string-renderer';
-import {
   expect
 } from 'chai';
 

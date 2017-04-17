@@ -14,11 +14,12 @@
  * @fileoverview
  * @author Taketoshi Aono
  */
-import { Renderer } from './renderer';
-import { FuelDOMNode } from '../type';
+import { FuelDOMNode, Renderer } from '../type';
 export declare class DomRenderer implements Renderer {
     private id;
     updateId(): void;
+    static getInstance(): DomRenderer;
     createElement(tagName: string): FuelDOMNode;
     createTextNode(text: string): FuelDOMNode;
+    createDocumentFragment(): FuelDOMNode;
 }

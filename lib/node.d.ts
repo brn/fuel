@@ -14,7 +14,6 @@
  * @fileoverview
  * @author Taketoshi Aono
  */
-import { FuelDOMNode } from './type';
 export declare const PX_CONVERTIONS: {
     'width': number;
     'height': number;
@@ -58,4 +57,4 @@ export declare const PX_CONVERTIONS: {
     'textHeight': number;
     'textIndent': number;
 };
-export declare function setStyle(el: FuelDOMNode, name: string, value: any): void;
+export declare function setStyle(el: Node, name: string, value: any): void;

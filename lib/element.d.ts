@@ -14,22 +14,23 @@
  * @fileoverview
  * @author Taketoshi Aono
  */
-import { FuelElement, BuiltinFuelElement, StatelessFuelElement, ComponentFuelElement, FactoryFuelElement, FuelDOMNode, FuelComponentType, Stem, KeyMap } from './type';
-import { Renderer } from './renderer/renderer';
+import { FuelElement, BuiltinFuelElement, StatelessFuelElement, ComponentFuelElement, FactoryFuelElement, FuelComponentType, Stem, KeyMap } from './type';
 export declare const INSTANCE_ELEMENT_SYM: any;
 export declare const FuelElementView: {
-    allocateTextTagName(): number;
-    allocateTagName(tagName: string): number;
-    isComponent(fuelElement: FuelElement): fuelElement is FactoryFuelElement;
+    isComponent(fuelElement: any): fuelElement is FactoryFuelElement;
     isStatelessComponent(fuelElement: FuelElement): fuelElement is StatelessFuelElement;
     isComponentClass(fuelElement: FuelElement): fuelElement is ComponentFuelElement;
+    isFragment(el: any): boolean;
     tagNameOf(fuelElement: FuelElement): string;
+    nameOf(fuelElement: FuelElement): string;
     hasChildren(el: FuelElement): boolean;
     cleanupElement(el: FuelElement): void;
-    attachFuelElementToNode(node: FuelDOMNode, fuelElement: FuelElement): void;
-    detachFuelElementFromNode(node: FuelDOMNode): void;
-    getFuelElementFromNode(el: FuelDOMNode): FuelElement;
+    attachFuelElementToNode(node: Node, fuelElement: FuelElement): void;
+    detachFuelElementFromNode(node: Node): void;
+    getFuelElementFromNode(el: Node): FuelElement;
     isFuelElement(fuelElement: any): fuelElement is FuelElement;
+    isDisposed(fuelElement: FuelElement): boolean;
+    setDisposed(fuelElement: FuelElement): void;
     isTextNode(fuelElement: FuelElement): fuelElement is BuiltinFuelElement;
     getTextValueOf(fuelElement: FuelElement): string;
     getComponentRenderedTree(fuelElement: FuelElement): FuelElement;
@@ -37,9 +38,21 @@ export declare const FuelElementView: {
     invokeDidUpdate(el: FuelElement): void;
     invokeWillUnmount(el: FuelElement): void;
     stripComponent(fuelElement: FuelElement): FuelElement;
-    instantiateComponent(context: any, fuelElement: FactoryFuelElement, oldElement?: FuelElement): [FuelElement, any];
+    initFuelElementBits(type: FuelComponentType): number;
+    instantiateComponent(context: any, fuelElement: FactoryFuelElement, createStem: () => Stem): [FuelElement, any];
     addEvent(rootElement: FuelElement, fuelElement: FuelElement, type: any, eventHandler: any): void;
-    createDomElement(rootElement: FuelElement, fuelElement: FuelElement, renderer: Renderer, createStem: () => Stem): any;
+    toStringTree(el: FuelElement, enableChecksum: boolean): string;
+    createDomElement(rootElement: FuelElement, fuelElement: FuelElement, createStem: () => Stem): any;
 };
 export declare function cloneElement(fuelElement: FuelElement, props?: any, children?: FuelElement[]): FuelElement;
+/**
+ * Create text representation.
+ */
+export declare function createTextNode(child: string): FuelElement;
 export declare function makeFuelElement(type: FuelComponentType, key: string | number, props: KeyMap<any>, children?: FuelElement[]): FuelElement;
+export declare function makeFragment(children: FuelElement[]): FuelElement;
+export declare const FLY_WEIGHT_ELEMENT_A: FuelElement;
+export declare const FLY_WEIGHT_ELEMENT_B: FuelElement;
+export declare const FLY_WEIGHT_FRAGMENT_A: FuelElement;
+export declare const FLY_WEIGHT_FRAGMENT_B: FuelElement;
+export declare function wrapNode(parent: FuelElement, value: any, wrapTarget: FuelElement, wrapFragment: FuelElement): FuelElement;

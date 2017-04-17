@@ -19,4 +19,5 @@ export interface Renderer {
     createElement(tagName: string): FuelDOMNode;
     createTextNode(text: string): FuelDOMNode;
     updateId(): void;
+    createDocumentFragment(): FuelDOMNode;
 }

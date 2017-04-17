@@ -2,6 +2,10 @@
 # yarn lockfile v1
 
 
+"@types/chai@^3.4.35":
+  version "3.4.35"
+  resolved "https://registry.yarnpkg.com/@types/chai/-/chai-3.4.35.tgz#e8d65f83492d2944f816fc620741821c28a8c900"
+
 "@types/mocha@^2.2.39":
   version "2.2.40"
   resolved "https://registry.yarnpkg.com/@types/mocha/-/mocha-2.2.40.tgz#9811dd800ece544cd84b5b859917bf584a150c4c"
@@ -1169,7 +1173,7 @@ diffie-hellman@^5.0.0:
     miller-rabin "^4.0.0"
     randombytes "^2.0.0"
 
-dom-serialize@^2.2.0:
+dom-serialize@^2.2.0, dom-serialize@^2.2.1:
   version "2.2.1"
   resolved "https://registry.yarnpkg.com/dom-serialize/-/dom-serialize-2.2.1.tgz#562ae8999f44be5ea3076f5419dcd59eb43ac95b"
   dependencies:
@@ -3717,7 +3721,7 @@ source-map-resolve@^0.3.0:
     source-map-url "~0.3.0"
     urix "~0.1.0"
 
-source-map-support@^0.4.1, source-map-support@^0.4.11:
+source-map-support@^0.4.1, source-map-support@^0.4.14:
   version "0.4.14"
   resolved "https://registry.yarnpkg.com/source-map-support/-/source-map-support-0.4.14.tgz#9d4463772598b86271b4f523f6c1f4e02a7d6aef"
   dependencies:
@@ -4261,6 +4265,10 @@ validate-npm-package-license@^3.0.1:
 vdom-benchmark-base@^0.2.4:
   version "0.2.4"
   resolved "https://registry.yarnpkg.com/vdom-benchmark-base/-/vdom-benchmark-base-0.2.4.tgz#2135b9c781055be4ab049e647924c03559a2218b"
+
+vdom-benchmark-generator@^0.1.2:
+  version "0.1.2"
+  resolved "https://registry.yarnpkg.com/vdom-benchmark-generator/-/vdom-benchmark-generator-0.1.2.tgz#de637f45c43e250289c172572d067dd10a76f5e3"
 
 verror@1.3.6:
   version "1.3.6"

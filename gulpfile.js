@@ -79,7 +79,7 @@ gulp.task('typescript-test', () => {
  * Minify javascript, mangle all vars and props.
  */
 gulp.task('minify', ['typescript'], done => {
-  minify({file: 'lib/index.js', uglify: true, souceMaps: false, builtins: false, onEnd: done, filesize: true, isTsify: false});
+  minify({file: 'lib/index.js', uglify: true, sourceMaps: false, builtins: false, onEnd: done, filesize: true, isTsify: false});
 });
 
 
@@ -87,7 +87,12 @@ gulp.task('minify', ['typescript'], done => {
  * Minify javascript, without any mangles.
  */
 gulp.task('minify-debug', ['typescript'], done => {
-  minify({file: 'lib/index.js', uglify: false, souceMaps: true, builtins: false, onEnd: done, filesize: false, isTsify: false});
+  minify({file: 'lib/index.js', uglify: false, sourceMaps: true, builtins: false, onEnd: done, filesize: false, isTsify: false});
+});
+
+
+gulp.task('bundle-bench-generator', done => {
+  minify({file: './bench/generator.ts', onEnd: done, sourceMaps: true, dist: './bench'});
 });
 
 
@@ -110,7 +115,7 @@ function minify({file, uglify = false, sourceMaps = false, onEnd = null, builtin
   let reserved = Uglify.readReservedFile('./reserved.json');
   reserved = Uglify.readDefaultReservedFile(reserved);
 
-  const b = browserify(file, {debug: sourceMaps, builtins, standalone: 'Fuel'})
+  const b = browserify(file, {debug: sourceMaps, builtins, standalone: 'Fuel', insertGlobalVars: {__DEBUG__() {return  'true'}}})
     .on('error', e => {
       console.error(e);
       process.exit(1);
@@ -126,15 +131,21 @@ function minify({file, uglify = false, sourceMaps = false, onEnd = null, builtin
     .pipe(source(`${path.basename(file).replace(/\.[^.]+$/, '')}.bundle.js`))
     .pipe(derequire())
     .pipe(buffer())
+    .pipe(gif(sourceMaps, sourcemaps.init({loadMaps: true})))
     .pipe(gif(uglify, guglify({
       mangle: true,
       compress: true,
       mangleProperties: {
         reserved: reserved.props,
         ignore_quoted: true
+      },
+      compress: {
+        dead_code: true,
+        global_defs: {
+          __DEBUG__: false
+        }
       }
     })))
-    .pipe(gif(sourceMaps, sourcemaps.init({loadMaps: true})))
     .pipe(gif(sourceMaps, sourcemaps.write()))
     .pipe(gif(filesize, size({enableGzip: true})))
     .pipe(gulp.dest(`./${dist}`))
@@ -216,7 +227,7 @@ gulp.task('test', ['typescript-test'], () => {
 gulp.task('bench', () => {
   const runSequence = require('run-sequence');
   return runSequence(
-    'minify',
+    ['minify', 'bundle-bench-generator'],
     'local-install',
     () => minify({file: './bench/index.tsx', dist: './bench'})
   );
@@ -228,7 +239,7 @@ gulp.task('bench', () => {
 gulp.task('bench-debug', () => {
   const runSequence = require('run-sequence');
   return runSequence(
-    'minify-debug',
+    ['minify-debug', 'bundle-bench-generator'],
     'local-install',
     () => minify({file: './bench/index.tsx', dist: './bench'})
   );

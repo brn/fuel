@@ -20,11 +20,15 @@ export interface KeyMap<T> {
   [key: string]: T;
 }
 
+export interface IndexMap<T> {
+  [key: number]: T;
+}
 
 export interface Property {
   name: string;
   value: any;
 }
+
 
 export interface SharedEventHandler {
   addEvent(root: EventTarget, el: EventTarget, type: string, callback: (e: Event) => void): void;
@@ -38,42 +42,20 @@ export interface Stem {
   enterUnsafeUpdateZone(cb: () => void): void;
   setEventHandler(eventHandler: SharedEventHandler): void;
   getEventHandler(): SharedEventHandler;
-  render(el: FuelElement, callback?: (el: FuelDOMNode) => void, context?: any, updateOwner?: boolean): void;
+  render(el: FuelElement, callback?: (el: Node) => void, context?: any, updateOwner?: boolean): void;
   registerOwner(el: FuelElement): void;
   owner(): FuelElement;
-  unmountComponent(fuelElement: FuelElement, cb: () => void): void;
+  unmountComponent(fuelElement: FuelElement, cb?: () => void): void;
 }
 
-
-export interface StringNodeReprensation {
-  tagName: string|null;
-  attrs: {[key: string]: any};
-  childNodes: StringNodeReprensation[];
-  children: StringNodeReprensation[];
-  nodeType: number;
-  parentNode: this;
-  text?: string;
-}
 
 export type FuelText = string | number;
 export type FuelChild = FuelElement | FuelText;
 
+
 // Should be Array<ReactNode> but type aliases cannot be recursive
 export type FuelFragment = {} | Array<FuelChild | any[] | boolean>;
 export type FuelNode = FuelChild | FuelFragment | boolean;
-
-export interface FuelDOMNode extends EventTarget {
-  removeAttribute(key: string): void;
-  appendChild(child: FuelDOMNode): FuelDOMNode;
-  parentNode: FuelDOMNode;
-  removeChild(node: FuelDOMNode): void;
-  replaceChild(newNode: FuelDOMNode, oldNode: FuelDOMNode): void
-  childNodes: FuelDOMNode[];
-  nodeType: number;
-  children: FuelDOMNode[];
-  style?: {[key: string]: string};
-  textContent: string;
-}
 
 
 export type FuelComponentType = number|string|FuelComponentStatic<any, any>|StatelessComponent<any>;
@@ -98,14 +80,13 @@ export interface PublicFuelElement {
 
 
 export interface FuelElement extends PublicFuelElement {
-  dom: FuelDOMNode;
-  _unmounted: boolean;
+  dom: Node;
   _ownerElement: FuelElement,
   _stem?: Stem;
   _componentInstance?: FuelComponent<any, any>;
-  _componentRenderedElementTreeCache?: FuelElement;
-  _keymap?: {[key: string]: FuelElement};
+  _componentRenderedElementTreeCache: FuelElement;
   _subscriptions?: ESSubscription[];
+  _flags: number;
 }
 
 
@@ -125,7 +106,7 @@ export interface ComponentFuelElement extends FuelElement {
 
 
 export interface FactoryFuelElement extends FuelElement {
-  type: FuelComponent<any, any>|StatelessComponent<any>;
+  type: FuelComponentStatic<any, any>|StatelessComponent<any>;
 }
 
 
@@ -147,6 +128,28 @@ export interface ReactCompatiblePropsTypes {
 }
 
 
+export const enum MoveType {
+  NONE = 0,
+  BEFORE,
+  AFTER,
+}
+
+
+export interface PatchOps {
+  move(moveTo: number, moveType: MoveType, oldElement: FuelElement): void;
+  replace(index: number, parent: FuelElement, newElement: FuelElement, oldElement: FuelElement, context: any): void;
+  update(newElement: FuelElement, oldElement: FuelElement): void;
+  insert(index: number, context: any, parent: FuelElement, newElement: FuelElement): void;
+  append(context: any, parent: FuelElement, el: FuelElement): void;
+  remove(index: number, parent: FuelElement, oldElement: FuelElement): void;
+  updateText(index: number, parent: FuelElement, newElement: FuelElement): void;
+  setText(parent: FuelElement, newElement: FuelElement): void;
+  createChildren(context: any, newElement: FuelElement);
+  removeChildren(newElement: FuelElement): void;
+  executeRemove(): void;
+}
+
+
 export interface AttributesMap {
   [key: string]: any;
 }
@@ -164,24 +167,11 @@ export interface ClassAttributes<T> extends Attributes {
   ref?: Ref<T>;
 }
 
-export interface TextTable {
-  valueAt(index: number): string;
-
-  registerFunction(text: string): number;
-
-  register(text: string): number;
-
-  clear();
-}
-
-
-export enum BuiltinElementValue {
-  CHILDREN = 0x2
-}
-
 
 export interface FuelComponentStatic<Props, State> {
   new(props: Props, context: any): FuelComponent<Props, State>;
+  name?: string;
+  displayName?: string;
 }
 
 
@@ -205,6 +195,8 @@ export interface FuelComponent<Props, State> {
 
 export interface StatelessComponent<Props> {
   (props: Props, context: any): FuelElement;
+  name?: string;
+  displayName?: string;
 }
 
 

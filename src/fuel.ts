@@ -31,112 +31,100 @@ import {
   KeyMap
 } from './type';
 import {
-  FuelStem
-} from './stem';
-import {
   FuelElementView,
   makeFuelElement,
   cloneElement,
   INSTANCE_ELEMENT_SYM
 } from './element';
 import {
-  Renderer
-} from './renderer/renderer';
+  RecycledElementDistributor,
+  RecycledNodeDistributor
+} from './recycler/recycler';
 import {
-  DomRenderer
-} from './renderer/dom-renderer';
+  ElementRecycler
+} from './recycler/element';
 import {
   invariant,
-  merge
+  merge,
+  keyList
 } from './util';
-
-
-/**
- * Iterate over all children and if array is exists, flatten that and
- * if text is exists, convert it to FuelElement.
- * @param arr Children elements.
- * @param skipArray Skip checking array type.
- * @returns Flattened array of FuelElement.
- */
-function checkChildren(arr: (FuelElement|any)[], skipArray = false) {
-  let ret = [];
-  for (let i = 0, len = arr.length; i < len; i++) {
-    const v = arr[i];
-    if (v === null) {
-      continue;
-    }
-
-    invariant(v === undefined, 'Undefined passed as element, it\'s seem to misstakes.');
-
-    if (FuelElementView.isFuelElement(v)) {
-      ret.push(v);
-    } else if (!skipArray && Array.isArray(v)) {
-      // We do not check inside children array.
-      // So if array exists in children array,
-      // that treated as text.
-      ret = checkChildren(v, true).concat(ret);
-    } else {
-      const textNode = createTextNode(v.toString());
-      ret.push(textNode);
-    }
-  }
-  return ret;
-}
-
-
-/**
- * Create text representation.
- */
-function createTextNode(child: string) {
-  return makeFuelElement(FuelElementView.allocateTextTagName(), null, [{name: 'value', value: child}]);
-}
+import {
+  isStateUpdated
+} from './difference';
 
 
 const VALID_TYPES = {'string': 1, 'function': 1};
 
 
 export class ComponentImpl<Props, State> implements FuelComponent<Props, State> {
-  public state: State;
+  private _state: State;
 
   constructor(private _props: Props = {} as any, private _context = {}) {
+    this['_componentRenderedElementTreeCache'] = null;
   }
 
   public refs?: {[key:string]: FuelComponent<any, any>|Element} = {};
 
-  public get ['props']() {return this._props}
+  public get state() {
+    return this._state;
+  }
 
-  public get ['context']() {return this._context;}
+  public set state(value) {
+    this._state = value;
+  }
 
-  public ['componentWillUnmount']() {}
+  public get props() {return this._props}
 
-  public ['componentWillMount']() {}
+  public get context() {return this._context;}
 
-  public ['componentDidMount']() {}
+  public componentWillUnmount() {}
 
-  public ['componentWillUpdate']() {}
+  public componentWillMount() {}
 
-  public ['componentDidUpdate']() {}
+  public componentDidMount() {}
 
-  public ['componentWillReceiveProps'](props: Props) {}
+  public componentWillUpdate() {}
 
-  public ['shouldComponentUpdate'](nextProps, prevProps) {return true;}
+  public componentDidUpdate() {}
 
-  public ['render'](): JSX.Element {return null;}
+  public componentWillReceiveProps(props: Props) {}
 
-  public ['getChildContext']<CC extends {}>(): CC {return {} as CC;};
+  public shouldComponentUpdate(nextProps, prevProps) {return true;}
+  
+  public render(): JSX.Element {return null;}
+
+  public getChildContext<CC extends {}>(): CC {return {} as CC;};
 
   /**
    * Will be rewrited after.
    */
-  public ['setState'](state: State, cb?: () => void) {
-    this.state = merge(this.state, state);
+  public setState(state: State|((currentState: State, props: Props) => State), cb?: () => void) {
+    if (typeof state === 'function') {
+      const nextState = state(this._state, this._props);
+      if (!isStateUpdated(this._state, nextState)) {
+        return;
+      }
+      this._state = nextState;
+    } else {
+      if (!isStateUpdated(this._state, state)) {
+        return;
+      }
+      this._state = merge(this._state, state);
+    }
+
+    this.forceUpdate(cb);
+  }
+
+  public forceUpdate(cb?: () => void) {
     this.componentWillUpdate();
     const newContext = merge(this.context || {}, this.getChildContext());
     const tree = this.render();
     const fuelElement: FuelElement = this[INSTANCE_ELEMENT_SYM];
     tree._componentInstance = this;
-    fuelElement._stem.render(tree, () => {
-      fuelElement._componentRenderedElementTreeCache = tree;
+    tree._ownerElement = fuelElement;
+    tree._stem = fuelElement._stem;
+    fuelElement._stem.render(tree as any, () => {
+      fuelElement._componentRenderedElementTreeCache = tree as any;
       cb && cb();
     }, newContext, false);
   }
@@ -152,7 +140,7 @@ export class PureComponentImpl<Props, State> extends ComponentImpl<Props, State>
         return true;
       }
     }
-    if (Object.keys(nextProps).length !== Object.keys(prevProps).length) {
+    if (keyList(nextProps).length !== keyList(prevProps).length) {
       return true;
     }
     return false;
@@ -160,6 +148,8 @@ export class PureComponentImpl<Props, State> extends ComponentImpl<Props, State>
 }
 
 
+const {isComponent} = FuelElementView;
+const {use} = ElementRecycler;
 export class Fuel {
   /**
    * Create Fuel element.
@@ -169,42 +159,25 @@ export class Fuel {
    * @param children Children elements.
    * @rreturns FuelElement tree.
    */
-  public static createElement<P extends {key?: string}>(type: string,                      props: HTMLAttributes, ...children: FuelNode[]): FuelElement;
-  public static createElement<P extends {key?: string}>(type: FuelComponentStatic<P, any>, props: P,              ...children: FuelNode[]): FuelElement;
-  public static createElement<P extends {key?: string}>(type: StatelessComponent<P>,       props: P,              ...children: FuelNode[]): FuelElement;
-  public static createElement<P extends {key?: string}>(type: string|FuelComponentStatic<P, any>|StatelessComponent<P>, props: HTMLAttributes & P, ...children: FuelElement[]): FuelElement {
+  public static createElement<P extends {key?: string, children: any[]}>(type: string,                      props: HTMLAttributes, ...children: FuelNode[]): FuelElement;
+  public static createElement<P extends {key?: string, children: any[]}>(type: FuelComponentStatic<P, any>, props: P,              ...children: FuelNode[]): FuelElement;
+  public static createElement<P extends {key?: string, children: any[]}>(type: StatelessComponent<P>,       props: P,              ...children: FuelNode[]): FuelElement;
+  public static createElement<P extends {key?: string, children: any[]}>(type: string|FuelComponentStatic<P, any>|StatelessComponent<P>, props: HTMLAttributes & P, ...children: FuelElement[]): FuelElement {
 
     invariant(!VALID_TYPES[typeof type], `Fuel element only accept one of 'string' or 'function' but got ${type}`);
 
-    if (!props) {
-      props = {} as any;
-    }
+    props = props || {} as any;
+    props.children = children;
 
-    const attrs: KeyMap<any> = {};
-    for (const key in props) {
-      if (key !== 'key') {
-        attrs[key] = props[key];
-      }
-    }
-
-    attrs.children = checkChildren(children);
-
-    const el = makeFuelElement(typeof type === 'string'? FuelElementView.allocateTagName(type): type, props.key, attrs, attrs.children);
-
-    // If element is component, We set stem to this FuelElement.
-    if (FuelElementView.isComponent(el) || props.scoped) {
-      el._stem = new FuelStem();
-    }
-    return el;
+    return use(type, props, children) || makeFuelElement(type, props.key, props, props.children);
   }
 
 
   public static unmountComponentAtNode(el: Node) {
     const fuelElement = FuelElementView.getFuelElementFromNode(el as any);
     if (fuelElement) {
-      fuelElement._stem.unmountComponent(fuelElement, () => {
-        el['innerHTML'] = '';
-      });
+      el.textContent = '';
+      fuelElement._stem.unmountComponent(fuelElement);
       FuelElementView.detachFuelElementFromNode(el as any);
     }
   }

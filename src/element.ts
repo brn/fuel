@@ -22,9 +22,6 @@ import {
   StatelessFuelElement,
   ComponentFuelElement,
   FactoryFuelElement,
-  BuiltinElementValue,
-  TextTable,
-  FuelDOMNode,
   Property,
   FuelComponent,
   StatelessComponent,
@@ -35,7 +32,8 @@ import {
   DOMEvents,
   DOMAttributes,
   Stem,
-  KeyMap
+  KeyMap,
+  FuelNode
 } from './type';
 import {
   setStyle
@@ -43,28 +41,26 @@ import {
 import {
   Symbol,
   merge,
-  invariant
+  invariant,
+  isDefined,
+  keyList
 } from './util';
 import {
   SharedEventHandlerImpl
 } from './event';
 import {
-  Renderer
-} from './renderer/renderer';
+  FuelElementBit
+} from './bits';
 import {
-  Difference,
-  DifferenceBits,
-  AttrState
-} from './difference';
+  domOps
+} from './domops';
 
 
-const FUEL_ELEMENT_MARK = Symbol('__fuel_element');
 const DOM_LINK = Symbol('__fuel_element_link');
-const TAG_NAMES = {map: {}, count: 1};
 const SYNTHETIC_TEXT = 'SYNTHETIC_TEXT';
+const SYNTHETIC_FRAGMENT = 'SYNTHETIC_FRAGMENT';
 const PROTOTYPE = 'prototype';
 
-TAG_NAMES.map[String(TAG_NAMES.map[SYNTHETIC_TEXT] = 0)] = SYNTHETIC_TEXT;
 
 function isFunction(maybeFn: any): maybeFn is Function {
   return typeof maybeFn === 'function'
@@ -73,31 +69,30 @@ function isFunction(maybeFn: any): maybeFn is Function {
 export const INSTANCE_ELEMENT_SYM = Symbol('__fuelelement');
 
 export const FuelElementView = {
-  allocateTextTagName(): number {return 0;},
-
-  allocateTagName(tagName: string): number {
-    const id = TAG_NAMES.map[tagName.toLowerCase()];
-    if (id) {
-      return id;
-    }
-    TAG_NAMES.map[String(TAG_NAMES.map[tagName] = TAG_NAMES.count)] = tagName;
-    return TAG_NAMES.count++;
-  },
-
-  isComponent(fuelElement: FuelElement): fuelElement is FactoryFuelElement {
-    return typeof fuelElement.type !== 'number';
+  isComponent(fuelElement: any): fuelElement is FactoryFuelElement {
+    const bit = FuelElementBit.STATELESS | FuelElementBit.COMPONENT;
+    return !!fuelElement && (fuelElement._flags & bit) > 0;
   },
 
   isStatelessComponent(fuelElement: FuelElement): fuelElement is StatelessFuelElement {
-    return isFunction(fuelElement.type) && !isFunction(fuelElement.type[PROTOTYPE].render)
+    return !!fuelElement && (fuelElement._flags & FuelElementBit.STATELESS) === FuelElementBit.STATELESS;
   },
 
   isComponentClass(fuelElement: FuelElement): fuelElement is ComponentFuelElement {
-    return isFunction(fuelElement.type) && isFunction(fuelElement.type[PROTOTYPE].render);
+    return !!fuelElement && (fuelElement._flags & FuelElementBit.COMPONENT) === FuelElementBit.COMPONENT;
+  },
+
+  isFragment(el: any): boolean {
+    return !!el && (el._flags & FuelElementBit.FRAGMENT) === FuelElementBit.FRAGMENT;
   },
 
   tagNameOf(fuelElement: FuelElement): string {
-    return TAG_NAMES.map[String(fuelElement.type)];
+    return fuelElement.type;
+  },
+
+  nameOf(fuelElement: FuelElement): string {
+    return !isComponent(fuelElement)? FuelElementView.tagNameOf(fuelElement):
+      fuelElement.type.name || fuelElement.type.displayName || 'Anonymouse';
   },
 
   hasChildren(el: FuelElement): boolean {
@@ -106,27 +101,28 @@ export const FuelElementView = {
 
   cleanupElement(el: FuelElement) {
     el = FuelElementView.stripComponent(el);
-    if (el.dom) {
-      el.dom[DOM_LINK] = null;
-      if (el.dom['__fuelevent']) {
+    if (!!el.dom) {
+      if (!!el.dom['__fuelevent']) {
         el._ownerElement._stem.getEventHandler().removeEvents(el.dom);
       }
-      el.dom = null;
     }
-    if (el._subscriptions) {
+    if (!!el._subscriptions) {
       el._subscriptions.forEach(s => s.unsubscribe());
     }
   },
 
-  attachFuelElementToNode(node: FuelDOMNode, fuelElement: FuelElement) {
+  attachFuelElementToNode(node: Node, fuelElement: FuelElement) {
+    // This make circular references between DOMElement and FuelElement,
+    // but all disposable FuelElement will cleanup at stem and all references will be cut off.
+    // So, this circular ref does'nt make leaks.
     node[DOM_LINK] = fuelElement;
   },
 
-  detachFuelElementFromNode(node: FuelDOMNode) {
+  detachFuelElementFromNode(node: Node) {
     node[DOM_LINK] = null;
   },
 
-  getFuelElementFromNode(el: FuelDOMNode): FuelElement {
+  getFuelElementFromNode(el: Node): FuelElement {
     if (el[DOM_LINK]) {
       return el[DOM_LINK];
     }
@@ -134,15 +130,23 @@ export const FuelElementView = {
   },
 
   isFuelElement(fuelElement: any): fuelElement is FuelElement {
-    return fuelElement && fuelElement[FUEL_ELEMENT_MARK] === Bytes.FUEL_ELEMENT_MARK;
+    return !!fuelElement && isDefined(fuelElement._flags) && (fuelElement._flags & FuelElementBit.FUEL_ELEMENT) === FuelElementBit.FUEL_ELEMENT;
+  },
+
+  isDisposed(fuelElement: FuelElement) {
+    return (fuelElement._flags & FuelElementBit.DISPOSED) === FuelElementBit.DISPOSED;
+  },
+
+  setDisposed(fuelElement: FuelElement) {
+    fuelElement._flags |= FuelElementBit.DISPOSED;
   },
 
   isTextNode(fuelElement: FuelElement): fuelElement is BuiltinFuelElement {
-    return fuelElement.type === 0;
+    return !!fuelElement && (fuelElement._flags & FuelElementBit.TEXT) === FuelElementBit.TEXT;
   },
 
   getTextValueOf(fuelElement: FuelElement): string {
-    return fuelElement.props[0].value;
+    return fuelElement.props.value;
   },
 
   getComponentRenderedTree(fuelElement: FuelElement): FuelElement {
@@ -168,36 +172,52 @@ export const FuelElementView = {
   },
 
   stripComponent(fuelElement: FuelElement) {
-    while (fuelElement && FuelElementView.isComponent(fuelElement)) {
-      fuelElement = fuelElement._componentRenderedElementTreeCache;
+    let instance;
+    let result = fuelElement;
+    while (isComponent(result)) {
+      result = result._componentRenderedElementTreeCache;
     }
-    return fuelElement;
+    return result;
   },
 
-  instantiateComponent(context: any, fuelElement: FactoryFuelElement, oldElement?: FuelElement): [FuelElement, any] {
+  initFuelElementBits(type: FuelComponentType) {
+    const isFn = isFunction(type);
+    return FuelElementBit.FUEL_ELEMENT |
+      (isFn && isFunction(type['prototype'].render)? FuelElementBit.COMPONENT: isFn? FuelElementBit.STATELESS: type === FRAGMENT_NAME? FuelElementBit.FRAGMENT: type === TEXT_NAME? FuelElementBit.TEXT: FuelElementBit.TAG);
+  },
+
+  instantiateComponent(context: any, fuelElement: FactoryFuelElement, createStem: () => Stem): [FuelElement, any] {
     const {props} = fuelElement
     const attrs = fuelElement.props;
-    const oldAttrs = oldElement? oldElement.props: null;
+
     if (FuelElementView.isStatelessComponent(fuelElement)) {
       return [fuelElement.type(attrs, context), context];
     }
 
+
     if (FuelElementView.isComponentClass(fuelElement)) {
       let instance: FuelComponent<any, any> = fuelElement._componentInstance;
       let callReceiveHook = !!instance;
+      let oldAttrs;
+
       if (!instance) {
+        // If element is component, We set stem to this FuelElement.
+        fuelElement._stem = createStem();
         instance = fuelElement._componentInstance = new fuelElement.type(attrs, context);
+        oldAttrs = {};
       } else {
         if ((instance as any)._context) {
           (instance as any)._context = context;
         }
+        oldAttrs = (instance as any)._props;
       }
 
       instance[INSTANCE_ELEMENT_SYM] = fuelElement;
 
       const newContext = merge(context, instance.getChildContext());
 
-      if (fuelElement._componentRenderedElementTreeCache && !instance.shouldComponentUpdate(attrs, oldAttrs)) {
+      if (instance && fuelElement._componentRenderedElementTreeCache &&
+          ((!keyList(oldAttrs).length && !keyList(attrs).length && !(instance as any)._state) || !instance.shouldComponentUpdate(attrs, oldAttrs))) {
         if (callReceiveHook) {
           fuelElement._stem.enterUnsafeUpdateZone(() => {
             instance.componentWillReceiveProps(attrs);
@@ -249,26 +269,56 @@ export const FuelElementView = {
     handler.addEvent(root.dom, fuelElement.dom, type, eventHandler);
   },
 
-  createDomElement(rootElement: FuelElement, fuelElement: FuelElement, renderer: Renderer, createStem: () => Stem) {
-    if (fuelElement.type === 0) {
-      return fuelElement.dom = renderer.createTextNode(FuelElementView.getTextValueOf(fuelElement)) as any;
+  toStringTree(el: FuelElement, enableChecksum: boolean): string {
+    let value;
+    let context = {};
+    if (isTextNode(el)) {
+      return getTextValueOf(el);
+    } else {
+      while (isComponent(el)) {
+        [value, context] = FuelElementView.instantiateComponent(context, el, () => ({}) as any)
+      }
+      if (!value) {
+        return '';
+      }
+    }
+
+    const attrs = [];
+    for (let key in this) {
+      const value = this[key];
+      if (value !== null) {
+        if (CONVERSATION_TABLE[key]) {
+          key = CONVERSATION_TABLE[key];
+        }
+        attrs.push(`${key}="${value}"`);
+      }
+    }
+    if (enableChecksum) {
+      attrs.unshift(`data-fuelchecksum=${el._flags}`);
+    }
+
+    return `<${value.type}${attrs.length? (' ' + attrs.join(' ')): ''}>${el.children.map(child => FuelElementView.toStringTree(child, enableChecksum)).join('')}</${value.type}>`;
+  },
+
+  createDomElement(rootElement: FuelElement, fuelElement: FuelElement, createStem: () => Stem) {
+    if (!!fuelElement.dom) {
+      return fuelElement.dom;
+    } else if (isTextNode(fuelElement)) {
+      return fuelElement.dom = domOps.newTextNode(getTextValueOf(fuelElement)) as any;
+    } else if (isFragment(fuelElement)) {
+      return fuelElement.dom = domOps.newFragment();
     }
 
     const {props, type} = fuelElement
     const tagName = FuelElementView.tagNameOf(fuelElement);
-    const dom = renderer.createElement(tagName);
-
-    // This make circular references between DOMElement and FuelElement,
-    // but all disposable FuelElement will cleanup at stem and all references will be cut off.
-    // So, this circular ref does'nt make leaks.
-    dom[DOM_LINK] = fuelElement;
-
-    fuelElement.dom = dom as any;
+    const dom = fuelElement.dom = domOps.newElement(tagName);
 
     let isScoped = false;
 
-    for (let name in props) {
-      if (name === 'children') {
+    const keys = keyList(props);
+    for (let i = 0, len = keys.length; i < len; ++i) {
+      let name = keys[i];
+      if (name === 'children' || name === 'key') {
         continue;
       }
       const value = props[name];
@@ -280,7 +330,7 @@ export const FuelElementView = {
         continue;
       } else if (name === 'scoped') {
         isScoped = true;
-      } else if (((value.isObservable || value.subscribe)) && isScoped) {
+      } else if (value && ((value.isObservable || value.subscribe)) && isScoped) {
         makeStem(fuelElement, name, value, createStem);
         continue;
       } else if (name === 'style') {
@@ -312,39 +362,34 @@ export const FuelElementView = {
 }
 
 
-function booleanAttr(el: FuelDOMNode, name: string, value: boolean) {
+const {isComponent, isStatelessComponent, isComponentClass, isTextNode, isFuelElement, isFragment, getTextValueOf, initFuelElementBits} = FuelElementView;
+
+
+function booleanAttr(el: Node, name: string, value: boolean) {
   if (value) {
     el[name] = name;
   } else {
-    el.removeAttribute(name);
+    (el as HTMLElement).removeAttribute(name);
   }
-}
-
-
-function mergeProps(oldP: Property[], p: any) {
-  const buf = {};
-  for (let i = 0, len = oldP.length; i < len; i++) {
-    buf[oldP[i].name] = i;
-  }
-  for (const key in p) {
-    if (buf[key]) {
-      oldP[buf[key]].value = p[key];
-    } else {
-      oldP.push({name: key, value: p[key]});
-    }
-  }
-  return oldP;
 }
 
 
 export function cloneElement(fuelElement: FuelElement, props: any = {}, children: FuelElement[] = fuelElement.children) {
   invariant(!FuelElementView.isFuelElement(fuelElement), `cloneElement only clonable FuelElement but got = ${fuelElement}`);
-  const el = makeFuelElement(fuelElement.type, fuelElement.key, mergeProps(fuelElement.props.slice(), props), children);
+  const el = makeFuelElement(fuelElement.type, fuelElement.key, merge(fuelElement.props, props), children);
   el._stem = fuelElement._stem;
   el._componentInstance = fuelElement._componentInstance
-  el._componentRenderedElementTreeCache = fuelElement._componentRenderedElementTreeCache;
-  el._subscriptions = fuelElement._subscriptions;
+  el._ownerElement = fuelElement._ownerElement;
+  el._flags = fuelElement._flags;
   return el;
+}
+
+
+/**
+ * Create text representation.
+ */
+export function createTextNode(child: string) {
+  return makeFuelElement(TEXT_NAME, null, {value: child});
 }
 
 
@@ -372,20 +417,55 @@ function makeStem(fuelElement: FuelElement, name: string, value: any, createStem
 }
 
 
+const FRAGMENT_NAME = 'SYNTHETIC_FRAGMENT';
+const TEXT_NAME = 'SYNTHETIC_TEXT';
+
+
 export function makeFuelElement(type: FuelComponentType, key: string|number = null, props: KeyMap<any>, children: FuelElement[] = []): FuelElement {
+  const isFn = isFunction(type);
   return {
-    [FUEL_ELEMENT_MARK]                : Bytes.FUEL_ELEMENT_MARK,
     type,
     key,
     props,
     children,
     dom                                : null,
     _ownerElement                      : null,
-    _unmounted                         : false,
+    _flags                             : initFuelElementBits(type),
     _stem                              : null,
     _componentInstance                 : null,
     _componentRenderedElementTreeCache : null,
-    _keymap                            : null,
     _subscriptions                     : null
+  };
+}
+
+
+export function makeFragment(children: FuelElement[]): FuelElement {
+  const ret = makeFuelElement(FRAGMENT_NAME, null, {}, children);
+  return ret;
+}
+
+
+export const FLY_WEIGHT_ELEMENT_A = createTextNode('');
+export const FLY_WEIGHT_ELEMENT_B = createTextNode('');
+
+export const FLY_WEIGHT_FRAGMENT_A = makeFragment([]);
+export const FLY_WEIGHT_FRAGMENT_B = makeFragment([]);
+
+export function wrapNode(parent: FuelElement, value: any, wrapTarget: FuelElement, wrapFragment: FuelElement): FuelElement {
+  if (value === null) {
+    return null;
   }
+
+  if (!isFragment(parent) && Array.isArray(value)) {
+    wrapFragment.key = null;
+    wrapFragment.dom = parent? parent.dom: null;
+    wrapFragment.children = value;
+    return wrapFragment;
+  } else if (!isFuelElement(value)) {
+    wrapTarget.key = null;
+    wrapTarget.dom = null;
+    wrapTarget.props['value'] = `${value}`;
+    return wrapTarget;
+  } else 
+  return value;
 }

@@ -16,6 +16,7 @@
  */
 
 
+import './type';
 import {
   expect
 } from 'chai';
@@ -23,23 +24,24 @@ import {
   FuelStem
 } from '../stem';
 import {
-  StringRenderer
-} from '../renderer/string-renderer';
-import {
   Fuel,
   React
 } from '../fuel';
+import {
+  domOps
+} from '../domops';
+import * as serialize from 'dom-serialize';
+
 
 describe('stem', () => {
-  beforeEach(() => {
-    FuelStem.renderer = new StringRenderer();
-  });
-
-  afterEach(() => {
-    FuelStem.renderer = null;
-  });
-
   describe('render', () => {
+    beforeEach(() => {
+      domOps.resetId();
+    })
+    afterEach(() => {
+      domOps.resetId();
+    })
+
     it('create real dom element', done => {
       const tree = (
         <div>
@@ -53,7 +55,7 @@ describe('stem', () => {
       );
       const s = new FuelStem();
       s.render(tree, dom => {
-        expect(dom.toString()).to.be.eq('<div data-id="1"><span data-id="1" class="foo-bar"><a data-id="1" href="javascript:void(0)">text</a></span><span data-id="1" class="foo-bar-baz-qux">text2</span></div>');
+        expect(serialize(dom)).to.be.eq('<div data-id="1"><span data-id="1" class="foo-bar"><a data-id="1" href="javascript:void(0)">text</a></span><span data-id="1" class="foo-bar-baz-qux">text2</span></div>');
         done();
       });
     })
@@ -70,7 +72,7 @@ describe('stem', () => {
         </div>
       );
       const s = new FuelStem();
-      s.render(tree, () => {
+      s.render(tree, ret => {
         const newTree = (
           <div className="foo-bar-baz-0">
             <span className="foo-bar-baz-1">
@@ -82,7 +84,11 @@ describe('stem', () => {
           </div>
         );
         s.render(newTree, dom => {
-          expect(dom.toString()).to.be.eq('<div data-id="1" class="foo-bar-baz-0"><span data-id="1" class="foo-bar-baz-1"><a data-id="1" href="javascript:void(0)">text</a></span><span data-id="1" class="foo-bar-baz-qux-2">text2</span></div>');
+          try {
+            expect(serialize(dom)).to.be.eq('<div data-id="1" class="foo-bar-baz-0"><span data-id="1" class="foo-bar-baz-1"><a data-id="1" href="javascript:void(0)">text</a></span><span data-id="1" class="foo-bar-baz-qux-2">text2</span></div>');
+          } catch(e) {
+            return done(e)
+          }
           done();
         });
       });
@@ -100,7 +106,7 @@ describe('stem', () => {
         </div>
       );
       const s = new FuelStem();
-      s.render(tree, () => {
+      s.render(tree, dom => {
         const newTree = (
           <div className="foo-bar-baz-0">
             <ul>
@@ -120,7 +126,7 @@ describe('stem', () => {
         
         s.render(newTree, dom => {
           try {
-            expect(dom.toString()).to.be.eq('<div data-id="1" class="foo-bar-baz-0"><ul data-id="2"><li data-id="2"><span data-id="2">text1</span></li><li data-id="2"><span data-id="2">text2</span></li><li data-id="2"><span data-id="2">text3</span></li></ul><span data-id="1" class="foo-bar-baz-2">text</span></div>');
+            expect(serialize(dom)).to.be.eq('<div data-id="1" class="foo-bar-baz-0"><ul data-id="2"><li data-id="2"><span data-id="2">text1</span></li><li data-id="2"><span data-id="2">text2</span></li><li data-id="2"><span data-id="2">text3</span></li></ul><span data-id="1" class="foo-bar-baz-2">text</span></div>');
           } catch(e) {
             return done(e);
           }
@@ -166,8 +172,8 @@ describe('stem', () => {
       );
       const s = new FuelStem();
 
-      s.render(ret, n => {
-        expect(n.toString()).to.be.eq('<div data-id="1" class="foobar"><span data-id="1" class="foobar-baz"><a data-id="1" href="javascript:void(0)">This is A tag.</a></span><ul data-id="1" class="foobar-baz"><li data-id="1"><span data-id="1" class="foobar-baz-true"><a data-id="1" href="javascript:void(0)">bar</a></span></li><li data-id="1"><span data-id="1" class="foobar-baz"><a data-id="1" href="javascript:void(0)">baz</a></span></li></ul></div>');
+      s.render(ret, dom => {
+        expect(serialize(dom)).to.be.eq('<div data-id="1" class="foobar"><span data-id="1" class="foobar-baz"><a data-id="1" href="javascript:void(0)">This is A tag.</a></span><ul data-id="1" class="foobar-baz"><li data-id="1"><span data-id="1" class="foobar-baz-true"><a data-id="1" href="javascript:void(0)">bar</a></span></li><li data-id="1"><span data-id="1" class="foobar-baz"><a data-id="1" href="javascript:void(0)">baz</a></span></li></ul></div>');
         flag = false;
         ret = (
           <div className="foobar">
@@ -177,9 +183,9 @@ describe('stem', () => {
             <Component />
           </div>
         );
-        s.render(ret, n => {
+        s.render(ret, dom => {
           try {
-            expect(n.toString()).to.be.eq('<div data-id="1" class="foobar"><span data-id="1" class="foobar-baz"><a data-id="1" href="javascript:void(0)">This is A tag.</a></span><ul data-id="1" class="foobar-baz"><li data-id="1"><span data-id="1" class="foobar-baz-false"><a data-id="1" href="javascript:void(0)">bar</a></span></li><li data-id="1">Changed!</li></ul></div>');
+            expect(serialize(dom)).to.be.eq('<div data-id="1" class="foobar"><span data-id="1" class="foobar-baz"><a data-id="1" href="javascript:void(0)">This is A tag.</a></span><ul data-id="1" class="foobar-baz"><li data-id="1"><span data-id="1" class="foobar-baz-false"><a data-id="1" href="javascript:void(0)">bar</a></span></li><li data-id="1">Changed!</li></ul></div>');
           } catch(e) {
             return done(e);
           }
@@ -240,8 +246,8 @@ describe('stem', () => {
             </div>
             );
       const s = new FuelStem();
-      s.render(ret, n => {
-        expect(n.toString()).to.be.eq('<div data-id="1" class="foobar"><span data-id="1" class="foobar-baz"><a data-id="1" href="javascript:void(0)">This is A tag.</a></span><ul data-id="1" class="foobar-baz"><li data-id="1"><span data-id="1" class="foobar-baz-true"><a data-id="1" href="javascript:void(0)">bar</a></span></li><li data-id="1"><span data-id="1" class="foobar-baz"><a data-id="1" href="javascript:void(0)">baz</a></span></li></ul></div>');
+      s.render(ret, dom => {
+        expect(serialize(dom)).to.be.eq('<div data-id="1" class="foobar"><span data-id="1" class="foobar-baz"><a data-id="1" href="javascript:void(0)">This is A tag.</a></span><ul data-id="1" class="foobar-baz"><li data-id="1"><span data-id="1" class="foobar-baz-true"><a data-id="1" href="javascript:void(0)">bar</a></span></li><li data-id="1"><span data-id="1" class="foobar-baz"><a data-id="1" href="javascript:void(0)">baz</a></span></li></ul></div>');
         props.value = false;
         ret = (
           <div className="foobar">
@@ -251,9 +257,9 @@ describe('stem', () => {
             <IDComponent flag={props}/>
           </div>
         );
-        s.render(ret, n => {
+        s.render(ret, dom => {
           try {
-            expect(n.toString()).to.be.eq('<div data-id="1" class="foobar"><span data-id="1" class="foobar-baz"><a data-id="1" href="javascript:void(0)">This is A tag.</a></span><ul data-id="1" class="foobar-baz"><li data-id="1"><span data-id="1" class="foobar-baz-false"><a data-id="1" href="javascript:void(0)">bar</a></span></li><li data-id="1">Changed!</li></ul></div>');
+            expect(serialize(dom)).to.be.eq('<div data-id="1" class="foobar"><span data-id="1" class="foobar-baz"><a data-id="1" href="javascript:void(0)">This is A tag.</a></span><ul data-id="1" class="foobar-baz"><li data-id="1"><span data-id="1" class="foobar-baz-false"><a data-id="1" href="javascript:void(0)">bar</a></span></li><li data-id="1">Changed!</li></ul></div>');
           } catch(e) {
             return done(e)
           }
@@ -274,8 +280,8 @@ describe('stem', () => {
       );
       const s = new FuelStem();
 
-      s.render(ret, n => {
-        expect(n.toString()).to.be.eq('<div data-id="1" class="foobar"><span data-id="1" class="foobar-baz"><a data-id="1" href="javascript:void(0)">This is A tag.</a></span><div data-id="1"><ul data-id="1" class="foobar-baz"><li data-id="1"><span data-id="1" class="foobar-baz-true"><a data-id="1" href="javascript:void(0)">bar</a></span></li><li data-id="1"><span data-id="1" class="foobar-baz"><a data-id="1" href="javascript:void(0)">baz</a></span></li></ul></div></div>');
+      s.render(ret, dom => {
+        expect(serialize(dom)).to.be.eq('<div data-id="1" class="foobar"><span data-id="1" class="foobar-baz"><a data-id="1" href="javascript:void(0)">This is A tag.</a></span><div data-id="1"><ul data-id="1" class="foobar-baz"><li data-id="1"><span data-id="1" class="foobar-baz-true"><a data-id="1" href="javascript:void(0)">bar</a></span></li><li data-id="1"><span data-id="1" class="foobar-baz"><a data-id="1" href="javascript:void(0)">baz</a></span></li></ul></div></div>');
         props.value = false;
         ret = (
           <div className="foobar">
@@ -285,9 +291,9 @@ describe('stem', () => {
             <NestedComponent flag={props}/>
           </div>
         );
-        s.render(ret, n => {
+        s.render(ret, dom => {
           try {
-            expect(n.toString()).to.be.eq('<div data-id="1" class="foobar"><span data-id="1" class="foobar-baz"><a data-id="1" href="javascript:void(0)">This is A tag.</a></span><div data-id="1"><ul data-id="1" class="foobar-baz"><li data-id="1"><span data-id="1" class="foobar-baz-false"><a data-id="1" href="javascript:void(0)">bar</a></span></li><li data-id="1">Changed!</li></ul></div></div>');
+            expect(serialize(dom)).to.be.eq('<div data-id="1" class="foobar"><span data-id="1" class="foobar-baz"><a data-id="1" href="javascript:void(0)">This is A tag.</a></span><div data-id="1"><ul data-id="1" class="foobar-baz"><li data-id="1"><span data-id="1" class="foobar-baz-false"><a data-id="1" href="javascript:void(0)">bar</a></span></li><li data-id="1">Changed!</li></ul></div></div>');
           } catch(e) {
             return done(e)
           }
@@ -331,8 +337,8 @@ describe('stem', () => {
       );
       const s = new FuelStem();
 
-      s.render(ret, n => {
-        expect(n.toString()).to.be.eq('<div data-id="1" class="foobar"><span data-id="1" class="foobar-baz"><a data-id="1" href="javascript:void(0)">This is A tag.</a></span><div data-id="1"><span data-id="1" class="context-class-name"></span></div></div>');
+      s.render(ret, dom => {
+        expect(serialize(dom)).to.be.eq('<div data-id="1" class="foobar"><span data-id="1" class="foobar-baz"><a data-id="1" href="javascript:void(0)">This is A tag.</a></span><div data-id="1"><span data-id="1" class="context-class-name"></span></div></div>');
         props.value = false;
         ret = (
           <div className="foobar">
@@ -344,9 +350,9 @@ describe('stem', () => {
             </ContextComponent>
           </div>
         );
-        s.render(ret, n => {
+        s.render(ret, dom => {
           try {
-            expect(n.toString()).to.be.eq('<div data-id="1" class="foobar"><span data-id="1" class="foobar-baz"><a data-id="1" href="javascript:void(0)">This is A tag.</a></span><div data-id="1"><span data-id="1" class="context-class-name-updated"></span></div></div>');
+            expect(serialize(dom)).to.be.eq('<div data-id="1" class="foobar"><span data-id="1" class="foobar-baz"><a data-id="1" href="javascript:void(0)">This is A tag.</a></span><div data-id="1"><span data-id="1" class="context-class-name-updated"></span></div></div>');
           } catch(e) {
             return done(e)
           }
@@ -404,12 +410,12 @@ describe('stem', () => {
         </div>
       );
       const s = new FuelStem();
-      s.render(tree(), n => {
-        expect(n.toString()).to.be.eq('<div data-id="1" class="foobar"><span data-id="1" class="foobar-baz"><a data-id="1" href="javascript:void(0)">This is A tag.</a></span><ul data-id="1" class="foobar-baz"><li data-id="1"><span data-id="1" class="foobar-baz-1"><a data-id="1" href="javascript:void(0)">bar</a></span></li><li data-id="1"><span data-id="1" class="foobar-baz-2"><a data-id="1" href="javascript:void(0)">baz</a></span></li></ul></div>');
+      s.render(tree(), dom => {
+        expect(serialize(dom)).to.be.eq('<div data-id="1" class="foobar"><span data-id="1" class="foobar-baz"><a data-id="1" href="javascript:void(0)">This is A tag.</a></span><ul data-id="1" class="foobar-baz"><li data-id="1"><span data-id="1" class="foobar-baz-1"><a data-id="1" href="javascript:void(0)">bar</a></span></li><li data-id="1"><span data-id="1" class="foobar-baz-2"><a data-id="1" href="javascript:void(0)">baz</a></span></li></ul></div>');
         flag = false;
-        s.render(tree(), n => {
+        s.render(tree(), dom => {
           try {
-            expect(n.toString()).to.be.eq('<div data-id="1" class="foobar"><span data-id="1" class="foobar-baz"><a data-id="1" href="javascript:void(0)">This is A tag.</a></span><ul data-id="1" class="foobar-baz"><li data-id="1"><span data-id="1" class="foobar-baz-2"><a data-id="1" href="javascript:void(0)">baz</a></span></li><li data-id="1"><span data-id="1" class="foobar-baz-1"><a data-id="1" href="javascript:void(0)">bar</a></span></li></ul></div>');
+            expect(serialize(dom)).to.be.eq('<div data-id="1" class="foobar"><span data-id="1" class="foobar-baz"><a data-id="1" href="javascript:void(0)">This is A tag.</a></span><ul data-id="1" class="foobar-baz"><li data-id="1"><span data-id="1" class="foobar-baz-2"><a data-id="1" href="javascript:void(0)">baz</a></span></li><li data-id="1"><span data-id="1" class="foobar-baz-1"><a data-id="1" href="javascript:void(0)">bar</a></span></li></ul></div>');
           } catch(e) {
             return done(e)
           }

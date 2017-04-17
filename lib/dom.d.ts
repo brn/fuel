@@ -14,10 +14,10 @@
  * @fileoverview
  * @author Taketoshi Aono
  */
-import { FuelElement, FuelDOMNode } from './type';
+import { FuelElement } from './type';
 export declare const FuelDOM: {
-    render(element: FuelElement, firstNode: Node | FuelDOMNode, cb?: (dom: Node) => void): void;
+    render(element: FuelElement, firstNode: Node, cb?: (dom: Node) => void): void;
 };
 export declare const ReactDOM: {
-    render(element: FuelElement, firstNode: Node | FuelDOMNode, cb?: (dom: Node) => void): void;
+    render(element: FuelElement, firstNode: Node, cb?: (dom: Node) => void): void;
 };
