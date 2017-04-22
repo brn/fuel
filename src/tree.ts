@@ -73,7 +73,7 @@ export function fastCreateDomTree(context: any, element: FuelElement, createStem
     const dom = createDomElement(element._ownerElement, element, createStem);
     const {children} = element;
     const {length} = children;
-    let flags = 0 | 0;
+    let flags = 0;
     let cursor = 0;
 
     if (fragment) {fragment.appendChild(dom);}

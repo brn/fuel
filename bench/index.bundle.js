@@ -288,13 +288,13 @@ exports.domOps = {
     resetId: function () { _id = 0; },
     updateId: function () { _id++; },
     newElement: function (tagName) {
-        var node = use(tagName);
-        if (!node) {
-            if (!(node = DOM_NODE_CACHE[tagName])) {
-                node = DOM_NODE_CACHE[tagName] = document.createElement(tagName);
-            }
-            node = node.cloneNode(false);
+        var node; // = use(tagName);
+        // if (!node) {
+        if (!(node = DOM_NODE_CACHE[tagName])) {
+            node = DOM_NODE_CACHE[tagName] = document.createElement(tagName);
         }
+        node = node.cloneNode(false);
+        // }
         if (__DEBUG__) {
             node.setAttribute('data-id', "" + _id);
         }
@@ -653,23 +653,28 @@ function makeStem(fuelElement, name, value, createStem) {
 }
 var FRAGMENT_NAME = 'SYNTHETIC_FRAGMENT';
 var TEXT_NAME = 'SYNTHETIC_TEXT';
+var FuelElementImpl = (function () {
+    function FuelElementImpl(type, key, props, children) {
+        if (key === void 0) { key = null; }
+        if (children === void 0) { children = []; }
+        this.type = type;
+        this.key = key;
+        this.props = props;
+        this.children = children;
+        this.dom = null;
+        this._ownerElement = null;
+        this._flags = initFuelElementBits(this.type);
+        this._stem = null;
+        this._componentInstance = null;
+        this._componentRenderedElementTreeCache = null;
+        this._subscriptions = null;
+    }
+    return FuelElementImpl;
+}());
 function makeFuelElement(type, key, props, children) {
     if (key === void 0) { key = null; }
     if (children === void 0) { children = []; }
-    var isFn = isFunction(type);
-    return {
-        type: type,
-        key: key,
-        props: props,
-        children: children,
-        dom: null,
-        _ownerElement: null,
-        _flags: initFuelElementBits(type),
-        _stem: null,
-        _componentInstance: null,
-        _componentRenderedElementTreeCache: null,
-        _subscriptions: null
-    };
+    return new FuelElementImpl(type, key, props, children);
 }
 exports.makeFuelElement = makeFuelElement;
 function makeFragment(children) {
@@ -1619,7 +1624,7 @@ var element_1 = _dereq_(4);
 var element_2 = _dereq_(13);
 var node_1 = _dereq_(14);
 var wrap = element_1.wrapNode;
-var isTextNode = element_1.FuelElementView.isTextNode, isFragment = element_1.FuelElementView.isFragment, isDisposed = element_1.FuelElementView.isDisposed, cleanupElement = element_1.FuelElementView.cleanupElement, setDisposed = element_1.FuelElementView.setDisposed, stripComponent = element_1.FuelElementView.stripComponent;
+var isFuelElement = element_1.FuelElementView.isFuelElement, isTextNode = element_1.FuelElementView.isTextNode, isFragment = element_1.FuelElementView.isFragment, isDisposed = element_1.FuelElementView.isDisposed, cleanupElement = element_1.FuelElementView.cleanupElement, setDisposed = element_1.FuelElementView.setDisposed, stripComponent = element_1.FuelElementView.stripComponent;
 var recycleNode = node_1.NodeRecycler.recycle;
 var recycleElement = element_2.ElementRecycler.recycle;
 function collect(fuelElement, all, cb) {
@@ -1632,27 +1637,32 @@ exports.collect = collect;
  */
 function doCollect(fuelElement, isParentDisposed, all) {
     var element = wrap(null, stripComponent(fuelElement), element_1.FLY_WEIGHT_ELEMENT_A, element_1.FLY_WEIGHT_FRAGMENT_A);
-    if (!element || isTextNode(element)) {
-        return;
-    }
-    if (isParentDisposed) {
-        setDisposed(element);
-    }
     var children = element.children;
     var isDisp = isDisposed(element);
-    var dom = element.dom;
-    if (!isFragment(element) && (all || isDisp)) {
-        if (dom && dom.childNodes.length) {
-            dom.textContent = '';
+    if (!isFragment(element)) {
+        if (!element) {
+            return;
         }
-        recycleNode(element);
-        cleanupElement(element);
-        recycleElement(element);
+        if (isParentDisposed) {
+            setDisposed(element);
+        }
+        var dom = element.dom;
+        if (!isFragment(element) && (all || isDisp)) {
+            if (dom && dom.childNodes.length) {
+                dom.textContent = '';
+            }
+            recycleNode(element);
+            cleanupElement(element);
+            recycleElement(element);
+        }
     }
     var length = children.length;
     var cursor = 0;
     while (length > cursor) {
-        doCollect(children[cursor++], isDisp, all);
+        var el = children[cursor++];
+        if (isFuelElement(el) || Array.isArray(el)) {
+            doCollect(el, isDisp, all);
+        }
     }
 }
 
@@ -1916,7 +1926,7 @@ function fastCreateDomTree(context, element, createStem, fragment) {
         var dom = createDomElement(element._ownerElement, element, createStem);
         var children = element.children;
         var length_1 = children.length;
-        var flags = 0 | 0;
+        var flags = 0;
         var cursor = 0;
         if (fragment) {
             fragment.appendChild(dom);
