@@ -420,22 +420,28 @@ function makeStem(fuelElement: FuelElement, name: string, value: any, createStem
 const FRAGMENT_NAME = 'SYNTHETIC_FRAGMENT';
 const TEXT_NAME = 'SYNTHETIC_TEXT';
 
+class FuelElementImpl {
+  public dom: Node;
+  public _ownerElement: FuelElement;
+  public _flags: number;
+  public _stem: Stem;
+  public _componentInstance: FuelComponent<any, any>;
+  public _componentRenderedElementTreeCache: FuelElement;
+  public _subscriptions: any;
+
+  constructor(public type: FuelComponentType, public key: string|number = null, public props: KeyMap<any>, public children: FuelElement[] = []) {
+    this.dom                                = null;
+    this._ownerElement                      = null;
+    this._flags                             = initFuelElementBits(this.type);
+    this._stem                              = null;
+    this._componentInstance                 = null;
+    this._componentRenderedElementTreeCache = null;
+    this._subscriptions                     = null;
+  }
+}
 
 export function makeFuelElement(type: FuelComponentType, key: string|number = null, props: KeyMap<any>, children: FuelElement[] = []): FuelElement {
-  const isFn = isFunction(type);
-  return {
-    type,
-    key,
-    props,
-    children,
-    dom                                : null,
-    _ownerElement                      : null,
-    _flags                             : initFuelElementBits(type),
-    _stem                              : null,
-    _componentInstance                 : null,
-    _componentRenderedElementTreeCache : null,
-    _subscriptions                     : null
-  };
+  return new FuelElementImpl(type, key, props, children);
 }
 
 

@@ -43,6 +43,7 @@ import {
 
 const wrap = wrapNode;
 const {
+  isFuelElement,
   isTextNode,
   isFragment,
   isDisposed,
@@ -67,30 +68,36 @@ export function collect(fuelElement: FuelElement, all?: boolean, cb?: () => void
  */
 function doCollect(fuelElement: FuelElement, isParentDisposed: boolean, all: boolean) {
   const element = wrap(null, stripComponent(fuelElement), FLY_WEIGHT_ELEMENT_A, FLY_WEIGHT_FRAGMENT_A);
-  if (!element || isTextNode(element)) {
-    return;
-  }
-  if (isParentDisposed) {
-    setDisposed(element);
-  }
-
   const {children} = element;
   const isDisp = isDisposed(element);
-  const {dom} = element;
-
-  if (!isFragment(element) && (all || isDisp)) {
-    if (dom && dom.childNodes.length) {
-      dom.textContent = '';
+  
+  if (!isFragment(element)) {
+    if (!element) {
+      return;
     }
-    recycleNode(element);
-    cleanupElement(element);
-    recycleElement(element);
+    if (isParentDisposed) {
+      setDisposed(element);
+    }
+
+    const {dom} = element;
+
+    if (!isFragment(element) && (all || isDisp)) {
+      if (dom && dom.childNodes.length) {
+        dom.textContent = '';
+      }
+      recycleNode(element);
+      cleanupElement(element);
+      recycleElement(element);
+    }
   }
 
   const {length} = children;
 
   let cursor = 0;
   while (length > cursor) {
-    doCollect(children[cursor++], isDisp, all);
+    const el = children[cursor++];
+    if (isFuelElement(el) || Array.isArray(el)) {
+      doCollect(el, isDisp, all);
+    }
   }
 }

@@ -18,13 +18,13 @@ export const domOps = {
   updateId() {_id++},
 
   newElement(tagName: string) {
-    let node = use(tagName);
-    if (!node) {
+    let node // = use(tagName);
+    // if (!node) {
       if (!(node = DOM_NODE_CACHE[tagName])) {
         node = DOM_NODE_CACHE[tagName] = document.createElement(tagName) as any;
       }
       node = node.cloneNode(false);
-    }
+    // }
     if (__DEBUG__) {
       (node as HTMLElement).setAttribute('data-id', `${_id}`);
     }
